@@ -1,0 +1,22 @@
+python-dotenv==1.0.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Twilio
+twilio==9.3.7
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+
+# Redis
+redis[hiredis]==5.2.1
+
+# Scheduling
+apscheduler==3.10.4
+
+# HTTP
+httpx==0.28.1
+
+# Shared models (import from server)
+# Will use sys.path to import from ../server/app/models
