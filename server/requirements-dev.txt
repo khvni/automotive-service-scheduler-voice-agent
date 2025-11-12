@@ -1,0 +1,24 @@
+# Development and testing dependencies
+-r requirements.txt
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+pytest-mock==3.14.0
+
+# Linting and formatting
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+mypy==1.13.1
+
+# Type stubs
+types-redis==4.6.0.20241004
+types-requests==2.32.0.20241016
+
+# Security
+bandit==1.7.10
+
+# Pre-commit
+pre-commit==4.0.1

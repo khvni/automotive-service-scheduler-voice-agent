@@ -78,6 +78,46 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Twenty CRM (Open Source)
+  twenty-db:
+    image: postgres:15-alpine
+    container_name: twenty-db
+    environment:
+      POSTGRES_USER: twenty
+      POSTGRES_PASSWORD: twenty
+      POSTGRES_DB: twenty
+    ports:
+      - "5433:5432"
+    volumes:
+      - twenty_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U twenty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - crm
+
+  twenty-server:
+    image: twentycrm/twenty:latest
+    container_name: twenty-server
+    ports:
+      - "3020:3000"
+    environment:
+      - PG_DATABASE_URL=postgres://twenty:twenty@twenty-db:5432/twenty
+      - FRONT_BASE_URL=http://localhost:3020
+      - SERVER_URL=http://localhost:3020
+      - ACCESS_TOKEN_SECRET=${TWENTY_ACCESS_TOKEN_SECRET:-change-me-in-production}
+      - LOGIN_TOKEN_SECRET=${TWENTY_LOGIN_TOKEN_SECRET:-change-me-in-production}
+      - REFRESH_TOKEN_SECRET=${TWENTY_REFRESH_TOKEN_SECRET:-change-me-in-production}
+      - FILE_TOKEN_SECRET=${TWENTY_FILE_TOKEN_SECRET:-change-me-in-production}
+    depends_on:
+      twenty-db:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - crm
+
   # Ngrok for local development (exposes server to internet for Twilio webhooks)
   ngrok:
     image: ngrok/ngrok:latest
@@ -97,3 +137,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  twenty_db_data:
