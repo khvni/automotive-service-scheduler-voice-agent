@@ -1,6 +1,6 @@
 """Appointment model."""
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Boolean, Text, Numeric
 from sqlalchemy.orm import relationship
 import enum
 
@@ -10,10 +10,11 @@ from app.models.base import Base, TimestampMixin
 class AppointmentStatus(str, enum.Enum):
     """Appointment status enum."""
 
-    PENDING = "pending"
+    SCHEDULED = "scheduled"
     CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
+    IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+    CANCELLED = "cancelled"
     NO_SHOW = "no_show"
 
 
@@ -23,37 +24,72 @@ class ServiceType(str, enum.Enum):
     OIL_CHANGE = "oil_change"
     TIRE_ROTATION = "tire_rotation"
     BRAKE_SERVICE = "brake_service"
+    BRAKE_INSPECTION = "brake_inspection"
     INSPECTION = "inspection"
+    ENGINE_DIAGNOSTICS = "engine_diagnostics"
     GENERAL_MAINTENANCE = "general_maintenance"
     REPAIR = "repair"
     DIAGNOSTIC = "diagnostic"
+    RECALL = "recall"
     OTHER = "other"
 
 
 class Appointment(Base, TimestampMixin):
-    """Appointment model for storing appointment information."""
+    """Appointment model for storing appointment information.
+
+    Stores comprehensive appointment data including:
+    - Scheduling details and timing
+    - Service type and category
+    - Customer concerns and recommendations
+    - Cost estimates and actuals
+    - Status and workflow tracking
+    - Communication tracking (confirmations, reminders)
+    - Calendar integration
+    - Assignment to technicians and service bays
+    """
 
     __tablename__ = "appointments"
 
+    # Primary Identity
     id = Column(Integer, primary_key=True, index=True)
-    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"))
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False, index=True)
+    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), index=True)
 
-    # Appointment details
+    # Appointment Details
     scheduled_at = Column(DateTime, nullable=False, index=True)
     duration_minutes = Column(Integer, default=60)
     service_type = Column(SQLEnum(ServiceType), default=ServiceType.GENERAL_MAINTENANCE)
-    status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.PENDING, index=True)
+    service_category = Column(String(50))  # maintenance, repair, inspection, recall
 
-    # Service details
-    service_description = Column(String(1000))
-    estimated_cost = Column(Integer)  # in cents
-    actual_cost = Column(Integer)  # in cents
+    # Service Details
+    service_description = Column(Text)
+    customer_concerns = Column(Text)  # What the customer reported
+    recommended_services = Column(Text)  # What we recommend
+    estimated_cost = Column(Numeric(10, 2))  # Using Decimal for currency
+    actual_cost = Column(Numeric(10, 2))  # Using Decimal for currency
 
-    # Calendar integration
-    google_calendar_event_id = Column(String(255), unique=True, index=True)
+    # Status & Workflow
+    status = Column(SQLEnum(AppointmentStatus), default=AppointmentStatus.SCHEDULED, index=True)
+    cancellation_reason = Column(String(200))
+    confirmation_sent = Column(Boolean, default=False)
+    reminder_sent = Column(Boolean, default=False)
 
-    notes = Column(String(2000))
+    # External Integration
+    calendar_event_id = Column(String(255))  # Google Calendar ID
+
+    # Assignment
+    assigned_technician = Column(String(100))
+    service_bay = Column(String(10))
+
+    # Communication History
+    booking_method = Column(String(20))  # phone, online, walk_in, ai_voice
+    booked_by = Column(String(100))  # Agent name or 'AI Voice Agent'
+
+    # Notes
+    notes = Column(Text)
+
+    # Timestamps
+    completed_at = Column(DateTime)
 
     # Relationships
     customer = relationship("Customer", back_populates="appointments")
