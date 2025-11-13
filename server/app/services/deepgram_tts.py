@@ -1,7 +1,7 @@
 """
 Deepgram Text-to-Speech service for real-time audio synthesis.
 
-This service handles WebSocket-based TTS for Twilio audio streams
+This service uses Deepgram's REST streaming API for Twilio audio streams
 using Deepgram's Aura model optimized for natural-sounding speech.
 """
 
@@ -10,20 +10,7 @@ import logging
 import time
 from typing import Optional
 
-from deepgram import DeepgramClient, DeepgramClientOptions
-try:
-    from deepgram.core.events import EventType
-    from deepgram.extensions.types.sockets import (
-        SpeakV1ControlMessage,
-        SpeakV1SocketClientResponse,
-        SpeakV1TextMessage,
-    )
-except ImportError:
-    # Deepgram SDK 3.8.0 has different imports
-    EventType = None
-    SpeakV1ControlMessage = dict
-    SpeakV1SocketClientResponse = dict
-    SpeakV1TextMessage = dict
+from deepgram import DeepgramClient, DeepgramClientOptions, SpeakOptions
 
 from .tts_interface import TTSInterface
 
@@ -37,8 +24,7 @@ class DeepgramTTSService(TTSInterface):
     Configured for Twilio phone audio streams with:
     - mulaw encoding at 8kHz (phone quality)
     - aura-2-asteria-en model (natural voice)
-    - Streaming support for low-latency response
-    - Barge-in support (clear command)
+    - REST streaming API for reliable audio delivery
     """
 
     def __init__(
@@ -63,9 +49,17 @@ class DeepgramTTSService(TTSInterface):
         self.sample_rate = sample_rate
 
         self.client: Optional[DeepgramClient] = None
-        self.connection = None
+        self.tts_client = None
         self.audio_queue: asyncio.Queue = asyncio.Queue()
         self._is_connected = False
+        self._current_stream = None
+
+        # TTS options for REST API
+        self.speak_options = SpeakOptions(
+            model=model,
+            encoding=encoding,
+            sample_rate=sample_rate,
+        )
 
         # Performance tracking
         self.tts_start_time: Optional[float] = None
@@ -83,41 +77,18 @@ class DeepgramTTSService(TTSInterface):
 
     async def connect(self) -> None:
         """
-        Establish WebSocket connection to Deepgram TTS.
-
-        Sets up event listeners for:
-        - Open: Connection established
-        - Message: Audio data or control messages
-        - Close: Connection closed
-        - Error: Error handling
+        Initialize Deepgram TTS REST API client.
 
         Raises:
-            Exception: If connection fails
+            Exception: If initialization fails
         """
         try:
-            # Create Deepgram client (handles both sync and async)
+            # Create Deepgram client
             config = DeepgramClientOptions(options={"keepalive": "true"})
             self.client = DeepgramClient(self.api_key, config)
 
-            # Create speak connection with Twilio-compatible settings (SDK v3.8.0)
-            # Use asyncwebsocket.v("1") for async TTS operations
-            self.connection = self.client.speak.asyncwebsocket.v("1")
-
-            # Set up event listeners
-            self.connection.on(EventType.OPEN, self._on_open)
-            self.connection.on(EventType.MESSAGE, self._on_message)
-            self.connection.on(EventType.CLOSE, self._on_close)
-            self.connection.on(EventType.ERROR, self._on_error)
-
-            # Start the connection with options (SDK v3.8.0)
-            options = {
-                "model": self.model,
-                "encoding": self.encoding,
-                "sample_rate": self.sample_rate,
-            }
-
-            if not await self.connection.start(options):
-                raise Exception("Failed to start Deepgram TTS connection")
+            # Get REST API client for streaming TTS (SDK v3.8.0)
+            self.tts_client = self.client.speak.asyncrest.v("1")
 
             self._is_connected = True
 
@@ -132,10 +103,9 @@ class DeepgramTTSService(TTSInterface):
 
     async def send_text(self, text: str) -> None:
         """
-        Send text chunk to be converted to speech.
+        Send text to be converted to speech using REST streaming API.
 
-        Supports streaming multiple text chunks for low-latency synthesis.
-        Audio starts playing as soon as first chunk is synthesized.
+        Streams audio chunks directly to the audio queue as they arrive.
 
         Args:
             text: Text to synthesize
@@ -143,7 +113,7 @@ class DeepgramTTSService(TTSInterface):
         Raises:
             Exception: If not connected or send fails
         """
-        if not self._is_connected or not self.connection:
+        if not self._is_connected or not self.tts_client:
             raise Exception("Not connected to Deepgram TTS")
 
         try:
@@ -152,40 +122,48 @@ class DeepgramTTSService(TTSInterface):
                 self.tts_start_time = time.time()
                 self.first_byte_received = False
 
-            # Send text message (SDK v3.8.0 uses plain string)
-            await self.connection.send_text(text)
+            logger.debug(f"Sending text to TTS: {text[:50]}...")
 
-            logger.debug(f"Sent text to TTS: {text[:50]}...")
+            # Stream audio using REST API (SDK v3.8.0)
+            response = await self.tts_client.stream_raw(
+                {"text": text},
+                self.speak_options
+            )
+
+            # Process the streaming response
+            async for chunk in response.aiter_bytes():
+                if chunk:
+                    # Track time to first byte
+                    if not self.first_byte_received and self.tts_start_time:
+                        ttfb = (time.time() - self.tts_start_time) * 1000  # ms
+                        logger.info(f"Deepgram TTS: Time to First Byte = {ttfb:.2f}ms")
+                        self.first_byte_received = True
+
+                    # Add audio to queue for streaming
+                    await self.audio_queue.put(chunk)
+                    logger.debug(f"Deepgram TTS: Queued audio chunk ({len(chunk)} bytes)")
+
+            # Reset timing for next synthesis
+            self.tts_start_time = None
+            self.first_byte_received = False
+
+            logger.debug("TTS synthesis complete")
 
         except Exception as e:
-            logger.error(f"Failed to send text to Deepgram TTS: {e}")
+            logger.error(f"Failed to synthesize with Deepgram TTS: {e}")
             raise
 
     async def flush(self) -> None:
         """
-        Signal end of text stream and flush remaining audio.
-
-        Tells Deepgram that no more text is coming, allowing it
-        to finalize synthesis and return any buffered audio.
+        Flush is not needed for REST API - each send_text completes fully.
         """
-        if not self._is_connected or not self.connection:
-            logger.warning("Cannot flush: not connected to Deepgram TTS")
-            return
-
-        try:
-            # SDK v3.8.0 uses plain flush method
-            await self.connection.flush()
-            logger.debug("Sent Flush command to Deepgram TTS")
-
-        except Exception as e:
-            logger.error(f"Failed to flush Deepgram TTS: {e}")
+        pass
 
     async def clear(self) -> None:
         """
         Clear audio queue and stop current synthesis (barge-in).
 
-        Used when user interrupts AI speech. Clears both the local
-        audio queue and tells Deepgram to stop generating audio.
+        Clears the local audio queue to stop playback.
         """
         try:
             # Clear local audio queue
@@ -195,10 +173,7 @@ class DeepgramTTSService(TTSInterface):
                 except asyncio.QueueEmpty:
                     break
 
-            # Send clear command to Deepgram if connected (SDK v3.8.0)
-            if self._is_connected and self.connection:
-                await self.connection.clear()
-                logger.debug("Sent Clear command to Deepgram TTS (barge-in)")
+            logger.debug("Cleared TTS audio queue (barge-in)")
 
             # Reset timing metrics
             self.tts_start_time = None
@@ -230,13 +205,6 @@ class DeepgramTTSService(TTSInterface):
 
         self._is_connected = False
 
-        # Close connection (SDK v3.8.0 uses finish method)
-        if self.connection:
-            try:
-                self.connection.finish()
-            except Exception as e:
-                logger.error(f"Error closing Deepgram TTS connection: {e}")
-
         # Clear audio queue
         while not self.audio_queue.empty():
             try:
@@ -249,58 +217,3 @@ class DeepgramTTSService(TTSInterface):
         self.first_byte_received = False
 
         logger.info("Deepgram TTS connection closed")
-
-    # Event handlers
-
-    async def _on_open(self, *args, **kwargs) -> None:
-        """Handle connection open event."""
-        logger.info("Deepgram TTS: Connected")
-
-    async def _on_message(self, *args, **kwargs) -> None:
-        """
-        Handle message event.
-
-        Processes both audio data (bytes) and control messages (JSON).
-        Audio data is queued for streaming to Twilio.
-        """
-        # Extract message from args
-        message = kwargs.get("message") or (args[1] if len(args) > 1 else args[0])
-
-        # Check if it's audio data (bytes) or control message
-        if isinstance(message, bytes):
-            # Track time to first byte for performance metrics
-            if not self.first_byte_received and self.tts_start_time:
-                ttfb = (time.time() - self.tts_start_time) * 1000  # ms
-                logger.info(f"Deepgram TTS: Time to First Byte = {ttfb:.2f}ms")
-                self.first_byte_received = True
-
-            # Add audio to queue for streaming
-            await self.audio_queue.put(message)
-            logger.debug(f"Deepgram TTS: Received audio chunk ({len(message)} bytes)")
-
-        else:
-            # Control message (JSON response)
-            try:
-                msg_type = getattr(message, "type", "Unknown")
-                logger.debug(f"Deepgram TTS: Received {msg_type} event")
-
-                # Handle specific message types if needed
-                if msg_type == "Flushed":
-                    logger.debug("Deepgram TTS: Flush complete")
-                elif msg_type == "Cleared":
-                    logger.debug("Deepgram TTS: Clear complete (barge-in)")
-                elif msg_type == "Metadata":
-                    logger.debug(f"Deepgram TTS: Metadata = {message}")
-
-            except Exception as e:
-                logger.debug(f"Deepgram TTS: Received non-standard message: {message}")
-
-    async def _on_close(self, *args, **kwargs) -> None:
-        """Handle connection close event."""
-        logger.info("Deepgram TTS: Disconnected")
-        self._is_connected = False
-
-    async def _on_error(self, *args, **kwargs) -> None:
-        """Handle error event."""
-        error = kwargs.get("error") or (args[1] if len(args) > 1 else args[0])
-        logger.error(f"Deepgram TTS: Error received: {error}")
