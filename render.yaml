@@ -1,4 +1,5 @@
 services:
+  # Web service (FastAPI server)
   - type: web
     name: automotive-voice-server
     env: python
@@ -9,10 +10,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: ENV
+      - key: APP_ENV
         value: production
+      - key: DEBUG
+        value: false
+      - key: PORT
+        value: 8000
       - fromGroup: automotive-voice-secrets
 
+  # Background worker (cron jobs for reminders)
   - type: worker
     name: automotive-voice-worker
     env: python
@@ -23,30 +29,79 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
-      - key: ENV
+      - key: APP_ENV
         value: production
+      - key: DEBUG
+        value: false
       - fromGroup: automotive-voice-secrets
 
+# Database (PostgreSQL)
+databases:
+  - name: automotive-voice-db
+    databaseName: automotive_voice
+    user: automotive_voice_user
+    plan: starter
+
+# Environment variable groups (set these in Render dashboard)
 envVarGroups:
   - name: automotive-voice-secrets
     envVars:
+      # Database & Redis (auto-populated by Render)
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
         sync: false
+
+      # Base URL (set to your Render URL)
+      - key: BASE_URL
+        sync: false
+
+      # CORS Origins (set to your Render URL)
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Twilio credentials
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: TWILIO_PHONE_NUMBER
         sync: false
+
+      # Deepgram API
       - key: DEEPGRAM_API_KEY
         sync: false
+
+      # OpenAI API
       - key: OPENAI_API_KEY
         sync: false
+
+      # Google Calendar OAuth2
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REFRESH_TOKEN
         sync: false
+
+      # Worker configuration
+      - key: REMINDER_CRON_SCHEDULE
+        value: "0 9 * * *"
+      - key: WORKER_REMINDER_TIMEZONE
+        value: America/Chicago
+      - key: SERVER_API_URL
+        sync: false
+
+      # Business configuration
+      - key: SERVICE_CENTER_NAME
+        value: Otto's Auto
+      - key: SERVICE_CENTER_HOURS
+        value: Monday-Friday 8AM-6PM, Saturday 9AM-4PM
+      - key: CALENDAR_TIMEZONE
+        value: America/New_York
+      - key: DEFAULT_APPOINTMENT_DURATION
+        value: 60
+
+      # Redis configuration
+      - key: REDIS_SESSION_TTL
+        value: 3600
