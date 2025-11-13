@@ -127,21 +127,13 @@ echo "$HEALTH_RESPONSE"
 echo ""
 
 echo -e "${BLUE}=== Important Information ===${NC}"
-echo -e "${YELLOW}⚠️  This will make a REAL phone call to: ${TEST_NUMBER}${NC}"
-echo -e "Twilio will call this number and connect to your server"
-echo -e "Make sure your phone is ready to answer!"
-echo -e "Cost: ~$0.01-0.02 per minute"
-echo ""
+echo -e "${YELLOW}⚠️  Making REAL phone call to: ${TEST_NUMBER}${NC}"
 echo -e "Server running at: ${GREEN}http://localhost:8000${NC}"
 echo -e "Webhook URL: ${GREEN}${BASE_URL}/api/v1/webhooks/outbound-reminder${NC}"
 echo ""
 
 # Ask for confirmation
 read -p "$(echo -e ${YELLOW}Press ENTER to make the call, or Ctrl+C to cancel...${NC})"
-
-echo ""
-echo -e "${GREEN}Starting Demo 2 with real call...${NC}"
-echo ""
 
 # Run the demo with --make-call flag
 $PYTHON_CMD demos/demo_2_outbound_reminder.py --make-call
