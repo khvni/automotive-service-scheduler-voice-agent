@@ -30,7 +30,8 @@ from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.call_log import CallDirection, CallLog, CallStatus
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
-from app.services.database import async_session_maker, init_db
+from app.services import database
+from app.services.database import init_db
 from app.tools.crm_tools import get_upcoming_appointments, reschedule_appointment
 from sqlalchemy import and_, select
 from twilio.rest import Client
@@ -146,15 +147,19 @@ async def setup_test_appointment(db):
 
     # Create appointment for tomorrow
     tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
-    appointment_time = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0)
+    # Store as naive datetime since DB column is TIMESTAMP WITHOUT TIME ZONE
+    appointment_time = tomorrow.replace(hour=10, minute=0, second=0, microsecond=0, tzinfo=None)
 
     # Check if appointment already exists
+    # Note: scheduled_at is stored as TIMESTAMP WITHOUT TIME ZONE, so convert to naive
+    tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=None)
     result = await db.execute(
         select(Appointment).where(
             and_(
                 Appointment.customer_id == customer.id,
-                Appointment.scheduled_at >= tomorrow.replace(hour=0, minute=0),
-                Appointment.scheduled_at < tomorrow.replace(hour=23, minute=59),
+                Appointment.scheduled_at >= tomorrow_start,
+                Appointment.scheduled_at < tomorrow_end,
                 Appointment.status == AppointmentStatus.CONFIRMED,
             )
         )
@@ -198,11 +203,15 @@ async def find_appointments_for_reminders(db):
 
     print_info(f"Searching for appointments between {tomorrow_start} and {tomorrow_end}")
 
+    # Convert to naive datetimes for DB query (scheduled_at is TIMESTAMP WITHOUT TIME ZONE)
+    tomorrow_start_naive = tomorrow_start.replace(tzinfo=None)
+    tomorrow_end_naive = tomorrow_end.replace(tzinfo=None)
+
     # Query appointments for tomorrow that are confirmed
     query = select(Appointment).where(
         and_(
-            Appointment.scheduled_at >= tomorrow_start,
-            Appointment.scheduled_at < tomorrow_end,
+            Appointment.scheduled_at >= tomorrow_start_naive,
+            Appointment.scheduled_at < tomorrow_end_naive,
             Appointment.status == AppointmentStatus.CONFIRMED,
         )
     )
@@ -419,7 +428,8 @@ async def simulate_outbound_conversation(db, customer: Customer, appointment: Ap
 
     # Calculate Friday at 1 PM
     friday = datetime.now(timezone.utc) + timedelta(days=4)
-    new_time = friday.replace(hour=13, minute=0, second=0, microsecond=0)
+    # Convert to naive datetime for DB (TIMESTAMP WITHOUT TIME ZONE)
+    new_time = friday.replace(hour=13, minute=0, second=0, microsecond=0, tzinfo=None)
 
     print_info(f"Rescheduling appointment {appointment.id} to {new_time}")
 
@@ -448,11 +458,10 @@ async def verify_call_logging(db, customer: Customer):
         to_number=customer.phone_number,
         status=CallStatus.COMPLETED,
         duration_seconds=105,
-        call_type="appointment_reminder",
+        intent="appointment_reminder",
         summary="Appointment reminder - customer rescheduled to Friday 1 PM",
-        recording_url=None,
-        started_at=datetime.now(timezone.utc),
-        ended_at=datetime.now(timezone.utc) + timedelta(seconds=105),
+        started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        ended_at=(datetime.now(timezone.utc) + timedelta(seconds=105)).replace(tzinfo=None),
     )
 
     db.add(call_log)
@@ -527,7 +536,7 @@ async def main():
         await init_db()
         print_success("Database connected")
 
-        async with async_session_maker() as db:
+        async with database.async_session_maker() as db:
             # Setup test appointment
             customer, vehicle, appointment = await setup_test_appointment(db)
 

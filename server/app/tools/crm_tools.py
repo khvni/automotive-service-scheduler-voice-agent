@@ -321,9 +321,9 @@ async def book_appointment(
         # Parse scheduled datetime
         try:
             scheduled_datetime = datetime.fromisoformat(scheduled_at)
-            # Ensure timezone awareness
-            if scheduled_datetime.tzinfo is None:
-                scheduled_datetime = scheduled_datetime.replace(tzinfo=timezone.utc)
+            # Remove timezone info since DB column is TIMESTAMP WITHOUT TIME ZONE
+            if scheduled_datetime.tzinfo is not None:
+                scheduled_datetime = scheduled_datetime.replace(tzinfo=None)
         except ValueError as e:
             logger.error(f"Invalid datetime format {scheduled_at}: {e}")
             return {
@@ -645,9 +645,9 @@ async def reschedule_appointment(
         # Parse new datetime
         try:
             new_scheduled_at = datetime.fromisoformat(new_datetime)
-            # Ensure timezone awareness
-            if new_scheduled_at.tzinfo is None:
-                new_scheduled_at = new_scheduled_at.replace(tzinfo=timezone.utc)
+            # Remove timezone info since DB column is TIMESTAMP WITHOUT TIME ZONE
+            if new_scheduled_at.tzinfo is not None:
+                new_scheduled_at = new_scheduled_at.replace(tzinfo=None)
         except ValueError as e:
             logger.error(f"Invalid datetime format {new_datetime}: {e}")
             return {
