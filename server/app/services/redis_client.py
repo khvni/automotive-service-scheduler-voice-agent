@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import redis.asyncio as redis
@@ -11,7 +11,7 @@ from app.config import settings
 # Configure logging
 logger = logging.getLogger(__name__)
 
-redis_client = None
+redis_client: Optional[redis.Redis] = None
 
 # Key prefixes for namespace organization
 SESSION_PREFIX = "session:"
@@ -38,6 +38,14 @@ async def close_redis():
     if redis_client:
         await redis_client.close()
         logger.info("Redis connection closed")
+
+
+def _check_redis_initialized() -> bool:
+    """Check if Redis client is initialized."""
+    if not redis_client:
+        logger.error("Redis client not initialized - call init_redis() first")
+        return False
+    return True
 
 
 def get_redis():
@@ -83,10 +91,13 @@ async def set_session(call_sid: str, session_data: dict, ttl: int = 3600) -> boo
         }
     """
     try:
+        if not _check_redis_initialized():
+            return False
+
         key = f"{SESSION_PREFIX}{call_sid}"
 
         # Add metadata timestamps
-        session_data["last_updated"] = datetime.utcnow().isoformat()
+        session_data["last_updated"] = datetime.now(timezone.utc).isoformat()
         if "created_at" not in session_data:
             session_data["created_at"] = session_data["last_updated"]
 
@@ -113,6 +124,9 @@ async def get_session(call_sid: str) -> Optional[dict]:
         Session data dictionary or None if not found
     """
     try:
+        if not _check_redis_initialized():
+            return None
+
         key = f"{SESSION_PREFIX}{call_sid}"
         value = await redis_client.get(key)
 
@@ -139,6 +153,9 @@ async def update_session(call_sid: str, updates: dict) -> bool:
         True if successful, False otherwise
     """
     try:
+        if not _check_redis_initialized():
+            return False
+
         # Get existing session
         session_data = await get_session(call_sid)
         if not session_data:
@@ -153,7 +170,7 @@ async def update_session(call_sid: str, updates: dict) -> bool:
 
         # Merge updates
         session_data.update(updates)
-        session_data["last_updated"] = datetime.utcnow().isoformat()
+        session_data["last_updated"] = datetime.now(timezone.utc).isoformat()
 
         # Store updated session with original TTL
         return await set_session(call_sid, session_data, ttl)
@@ -173,6 +190,9 @@ async def delete_session(call_sid: str) -> bool:
         True if deleted, False otherwise
     """
     try:
+        if not _check_redis_initialized():
+            return False
+
         key = f"{SESSION_PREFIX}{call_sid}"
         deleted = await redis_client.delete(key)
 
@@ -218,10 +238,13 @@ async def cache_customer(phone: str, customer_data: dict, ttl: int = 300) -> boo
         }
     """
     try:
+        if not _check_redis_initialized():
+            return False
+
         key = f"{CUSTOMER_PREFIX}{phone}"
 
         # Add cache timestamp
-        customer_data["cached_at"] = datetime.utcnow().isoformat()
+        customer_data["cached_at"] = datetime.now(timezone.utc).isoformat()
 
         # Serialize to JSON
         value = json.dumps(customer_data)
@@ -246,6 +269,9 @@ async def get_cached_customer(phone: str) -> Optional[dict]:
         Customer data dictionary or None if not found
     """
     try:
+        if not _check_redis_initialized():
+            return None
+
         key = f"{CUSTOMER_PREFIX}{phone}"
         value = await redis_client.get(key)
 
@@ -271,6 +297,9 @@ async def invalidate_customer_cache(phone: str) -> bool:
         True if deleted, False otherwise
     """
     try:
+        if not _check_redis_initialized():
+            return False
+
         key = f"{CUSTOMER_PREFIX}{phone}"
         deleted = await redis_client.delete(key)
 

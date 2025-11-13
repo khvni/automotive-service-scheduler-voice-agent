@@ -1,9 +1,18 @@
 """Customer model."""
 
 from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 
 from app.models.base import Base, TimestampMixin
+
+# US state codes for validation
+US_STATES = {
+    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+}
 
 
 class Customer(Base, TimestampMixin):
@@ -58,6 +67,27 @@ class Customer(Base, TimestampMixin):
     vehicles = relationship("Vehicle", back_populates="customer", cascade="all, delete-orphan")
     appointments = relationship("Appointment", back_populates="customer", cascade="all, delete-orphan")
     call_logs = relationship("CallLog", back_populates="customer", cascade="all, delete-orphan")
+
+    @validates('phone_number')
+    def validate_phone_number(self, key, value):
+        """Validate phone number length."""
+        if value and len(value) > 20:
+            raise ValueError(f"Phone number must be <= 20 characters, got {len(value)}")
+        return value
+
+    @validates('email')
+    def validate_email(self, key, value):
+        """Validate email length."""
+        if value and len(value) > 255:
+            raise ValueError(f"Email must be <= 255 characters, got {len(value)}")
+        return value
+
+    @validates('state')
+    def validate_state(self, key, value):
+        """Validate US state code."""
+        if value and value.upper() not in US_STATES:
+            raise ValueError(f"Invalid US state code: {value}")
+        return value.upper() if value else value
 
     def __repr__(self):
         return f"<Customer(id={self.id}, name='{self.first_name} {self.last_name}', phone='{self.phone_number}')>"

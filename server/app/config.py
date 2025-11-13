@@ -39,10 +39,17 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: str = ""
     TWILIO_WEBHOOK_URL: str = ""
 
-    # Deepgram
+    # Deepgram STT
     DEEPGRAM_API_KEY: str = ""
-    DEEPGRAM_MODEL: str = "nova-2"
-    DEEPGRAM_LANGUAGE: str = "en-US"
+    DEEPGRAM_MODEL: str = "nova-2-phonecall"  # Optimized for phone audio
+    DEEPGRAM_LANGUAGE: str = "en"
+    DEEPGRAM_ENCODING: str = "mulaw"  # Twilio audio encoding
+    DEEPGRAM_SAMPLE_RATE: int = 8000  # Phone quality
+    DEEPGRAM_CHANNELS: int = 1
+    DEEPGRAM_INTERIM_RESULTS: bool = True  # Enable for barge-in detection
+    DEEPGRAM_SMART_FORMAT: bool = True
+    DEEPGRAM_ENDPOINTING: int = 300  # ms
+    DEEPGRAM_UTTERANCE_END_MS: int = 1000  # ms
 
     # OpenAI
     OPENAI_API_KEY: str = ""
