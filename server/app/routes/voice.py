@@ -388,15 +388,66 @@ async def handle_media_stream(websocket: WebSocket):
                         # Generate AI response with streaming
                         is_speaking = True
                         response_text = ""
+                        sentence_buffer = ""
 
                         logger.info("[VOICE] Calling OpenAI to generate response...")
 
+                        # Create task to stream audio to Twilio in parallel
+                        async def stream_audio_to_twilio():
+                            """Stream audio from TTS to Twilio as it arrives."""
+                            chunks_sent = 0
+                            try:
+                                while is_speaking:
+                                    try:
+                                        # Wait for audio with timeout
+                                        audio_chunk = await asyncio.wait_for(
+                                            tts.audio_queue.get(),
+                                            timeout=0.5  # 500ms timeout
+                                        )
+
+                                        chunks_sent += 1
+
+                                        # Send audio to Twilio (base64 encode mulaw)
+                                        await websocket.send_json(
+                                            {
+                                                "event": "media",
+                                                "streamSid": stream_sid,
+                                                "media": {
+                                                    "payload": base64.b64encode(audio_chunk).decode("utf-8")
+                                                },
+                                            }
+                                        )
+                                        logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio")
+
+                                    except asyncio.TimeoutError:
+                                        # No audio for 500ms, check if we're still speaking
+                                        if not is_speaking:
+                                            break
+                                        continue
+
+                            except Exception as e:
+                                logger.error(f"[VOICE] Error streaming audio to Twilio: {e}")
+                            finally:
+                                logger.info(f"[VOICE] Finished streaming {chunks_sent} audio chunks to Twilio")
+
+                        # Start audio streaming task
+                        audio_task = asyncio.create_task(stream_audio_to_twilio())
+
+                        # Stream LLM response and send to TTS incrementally
                         async for event in openai.generate_response(stream=True):
                             if event["type"] == "content_delta":
-                                # Accumulate text chunks
+                                # Accumulate chunks and send sentences as they complete
                                 chunk = event["text"]
                                 response_text += chunk
-                                logger.info(f"[VOICE] Got OpenAI chunk: '{chunk}'")
+                                sentence_buffer += chunk
+                                logger.debug(f"[VOICE] Got OpenAI chunk: '{chunk}'")
+
+                                # Send to TTS when we have a complete sentence or phrase
+                                if any(p in chunk for p in [".", "!", "?", "\n", ":"]):
+                                    if sentence_buffer.strip():
+                                        logger.info(f"[VOICE] Sending to TTS: '{sentence_buffer[:100]}...'")
+                                        await tts.send_text(sentence_buffer)
+                                        sentence_buffer = ""
 
                             elif event["type"] == "tool_call":
                                 # Tool is being executed (logged by OpenAI service)
@@ -417,56 +468,23 @@ async def handle_media_stream(websocket: WebSocket):
                                 # Response generation complete
                                 logger.info(f"[VOICE] ===== ASSISTANT RESPONSE: {response_text} =====")
 
-                                # Send complete response to TTS once
-                                if response_text.strip():
-                                    logger.info(f"[VOICE] Sending complete response to TTS ({len(response_text)} chars)")
-                                    await tts.send_text(response_text)
-                                    logger.info(f"[VOICE] TTS send_text() returned")
+                                # Send any remaining text to TTS
+                                if sentence_buffer.strip():
+                                    logger.info(f"[VOICE] Sending final text to TTS: '{sentence_buffer}'")
+                                    await tts.send_text(sentence_buffer)
 
                                 # Flush TTS to finalize audio generation
                                 await tts.flush()
                                 break
 
-                        # Stream TTS audio to Twilio
-                        logger.info("[VOICE] Starting to stream audio chunks to Twilio")
-                        consecutive_empty = 0
-                        MAX_EMPTY_READS = 50  # 500ms timeout (50 * 10ms)
-                        chunks_sent = 0
+                        # Wait a bit for final audio chunks
+                        await asyncio.sleep(0.5)
 
-                        while is_speaking:
-                            audio_chunk = await tts.get_audio()
+                        # Stop speaking flag
+                        is_speaking = False
 
-                            if audio_chunk is None:
-                                # No audio available
-                                consecutive_empty += 1
-
-                                if consecutive_empty >= MAX_EMPTY_READS:
-                                    # No audio for 500ms, assume done
-                                    is_speaking = False
-                                    logger.info(f"[VOICE] Audio stream complete - sent {chunks_sent} chunks to Twilio")
-                                    break
-
-                                # Small delay before next check
-                                await asyncio.sleep(0.01)
-                                continue
-
-                            # Got audio chunk, reset timeout counter
-                            consecutive_empty = 0
-                            chunks_sent += 1
-
-                            # Send audio to Twilio (base64 encode mulaw)
-                            await websocket.send_json(
-                                {
-                                    "event": "media",
-                                    "streamSid": stream_sid,
-                                    "media": {
-                                        "payload": base64.b64encode(audio_chunk).decode("utf-8")
-                                    },
-                                }
-                            )
-                            logger.info(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio ({len(audio_chunk)} bytes)")
-
-                        logger.info(f"[VOICE] Finished streaming {chunks_sent} audio chunks to Twilio")
+                        # Wait for audio streaming to complete
+                        await audio_task
 
                         # Update session in Redis with conversation history
                         if call_sid:
