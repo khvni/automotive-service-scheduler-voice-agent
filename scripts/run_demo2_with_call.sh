@@ -92,7 +92,7 @@ echo ""
 echo -e "${BLUE}=== Starting Server ===${NC}"
 
 # Check if server is already running
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+if curl -s http://localhost:8000/api/v1/health > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Server already running at http://localhost:8000${NC}"
 else
     echo -e "${YELLOW}Starting server in background...${NC}"
@@ -107,7 +107,7 @@ else
     # Wait for server to start
     echo -e "${YELLOW}Waiting for server to be ready...${NC}"
     for i in {1..30}; do
-        if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        if curl -s http://localhost:8000/api/v1/health > /dev/null 2>&1; then
             echo -e "${GREEN}✓ Server is ready!${NC}"
             break
         fi
@@ -122,7 +122,7 @@ fi
 
 echo ""
 echo -e "${BLUE}=== Verifying Server Health ===${NC}"
-HEALTH_RESPONSE=$(curl -s http://localhost:8000/health)
+HEALTH_RESPONSE=$(curl -s http://localhost:8000/api/v1/health)
 echo "$HEALTH_RESPONSE"
 echo ""
 
