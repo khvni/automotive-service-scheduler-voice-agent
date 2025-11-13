@@ -1,0 +1,43 @@
+[MASTER]
+max-line-length=100
+disable=
+    C0111,  # missing-docstring
+    R0903,  # too-few-public-methods
+    C0103,  # invalid-name
+    R0913,  # too-many-arguments
+    R0914,  # too-many-locals
+    W0212,  # protected-access
+    C0330,  # bad-continuation
+
+[MESSAGES CONTROL]
+# Disable specific warnings
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    invalid-name,
+    too-many-arguments,
+    too-many-locals,
+    protected-access
+
+[REPORTS]
+output-format=colorized
+reports=no
+
+[BASIC]
+good-names=
+    i,
+    j,
+    k,
+    ex,
+    Run,
+    _,
+    db,
+    id,
+    app
+
+[DESIGN]
+max-args=8
+max-attributes=12
+max-locals=20
