@@ -1,136 +1,88 @@
-# Otto's Auto Voice Agent 🚗🤖
+# Automotive Voice Agent
 
-**AI-powered voice agent for automotive dealership appointment booking and customer service**
+AI-powered voice agent for automotive dealership appointment booking and customer service.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/Tests-100%2B%20Passing-success.svg)]()
 [![Code Style](https://img.shields.io/badge/Code%20Style-Black-black.svg)](https://github.com/psf/black)
-
----
 
 ## Overview
 
-Otto's Auto Voice Agent is a production-ready AI voice system that handles:
+Production-ready voice AI system for Otto's Auto that handles inbound appointment booking calls and automated outbound reminder calls. Features real-time speech processing, natural language understanding, and full CRM integration with sub-2-second latency.
 
-- 📞 **Inbound Calls:** Customers call to book, reschedule, or cancel appointments
-- 📱 **Outbound Reminders:** Automated reminder calls 24 hours before appointments
-- 🗣️ **Natural Conversations:** Real-time speech-to-text, GPT-4o responses, and text-to-speech
-- 📅 **Calendar Integration:** Syncs with Google Calendar for availability and booking
-- 💾 **Full CRM:** Customer lookup, vehicle tracking, appointment management
-- ⚡ **High Performance:** <2s end-to-end latency, <100ms barge-in detection
-
----
-
-## Features ✨
-
-### Core Capabilities
-- ✅ **Intelligent Voice Recognition** - Deepgram STT with phone-optimized model
-- ✅ **Natural Language Understanding** - OpenAI GPT-4o with function calling
-- ✅ **Realistic Voice Synthesis** - Deepgram TTS with streaming audio
-- ✅ **Real-time Conversations** - WebSocket-based bidirectional audio streaming
-- ✅ **Barge-in Support** - Interrupt AI mid-sentence for natural conversation
-- ✅ **Smart Appointment Booking** - Checks availability and books in real-time
-- ✅ **Customer Verification** - Verifies identity using DOB and address
-- ✅ **Multi-flow Conversations** - Handles new customers, existing customers, rescheduling, inquiries
-- ✅ **Automatic Reminders** - Daily cron job sends reminders 24h before appointments
-- ✅ **Escalation Detection** - Transfers to human when customer requests manager
-
-### Technical Features
-- ✅ **Async/Await Architecture** - High concurrency with Python asyncio
-- ✅ **Two-tier Caching** - Redis + Database for <2ms cached lookups
-- ✅ **Connection Pooling** - Efficient database and Redis connections
-- ✅ **State Machine** - 8-state conversation flow management
-- ✅ **Tool Calling** - 7 CRM tools with inline execution
-- ✅ **Atomic Operations** - Lua scripts prevent race conditions
-- ✅ **Graceful Degradation** - Handles API failures and timeouts
-- ✅ **Comprehensive Testing** - 100+ tests covering integration, load, and security
-
----
+**Core Capabilities:**
+- Real-time voice conversations with barge-in support
+- Intelligent appointment scheduling with calendar integration
+- Customer verification and vehicle tracking
+- Automated 24-hour reminder calls
+- Multi-flow conversation handling (booking, rescheduling, inquiries)
 
 ## Architecture
 
 ```
-┌─────────────────┐
-│  Twilio Phone   │
-│    Network      │
-└────────┬────────┘
-         │ Media Streams (WebSocket)
-         ▼
-┌─────────────────────────────────────────┐
-│     FastAPI Server (voice.py)           │
-│  ┌───────────┬──────────┬──────────┐   │
-│  │ Deepgram  │ OpenAI   │ Deepgram │   │
-│  │    STT    │  GPT-4o  │   TTS    │   │
-│  └─────┬─────┴────┬─────┴─────┬────┘   │
-│        │          │           │         │
-│        ▼          ▼           ▼         │
-│  ┌─────────────────────────────────┐   │
-│  │       CRM Tools (7 tools)       │   │
-│  └──────────┬──────────────────────┘   │
-└─────────────┼──────────────────────────┘
-              │
-    ┌─────────┴─────────┐
-    ▼                   ▼
-┌─────────┐      ┌────────────┐
-│  Redis  │      │ PostgreSQL │
-│ Cache/  │      │  Customer  │
-│Sessions │      │  Vehicle   │
-│         │      │Appointment │
-└─────────┘      └──────┬─────┘
-                        │
-                        ▼
-                 ┌─────────────┐
-                 │   Google    │
-                 │  Calendar   │
-                 └─────────────┘
+Twilio Phone Network
+        │
+        ├─ WebSocket Media Stream (mulaw @ 8kHz)
+        ▼
+┌────────────────────────────────────┐
+│     FastAPI Server                 │
+│  ┌──────────┬──────────┬────────┐ │
+│  │ Deepgram │  OpenAI  │Deepgram│ │
+│  │   STT    │  GPT-4o  │  TTS   │ │
+│  └────┬─────┴────┬─────┴────┬───┘ │
+│       │          │          │     │
+│       └──────────┼──────────┘     │
+│                  │                │
+│         ┌────────▼────────┐       │
+│         │   CRM Tools     │       │
+│         │  (7 functions)  │       │
+│         └────────┬────────┘       │
+└──────────────────┼────────────────┘
+                   │
+        ┌──────────┴──────────┐
+        ▼                     ▼
+   ┌─────────┐        ┌──────────────┐
+   │  Redis  │        │  PostgreSQL  │
+   │ Session │        │   Customer   │
+   │  Cache  │        │   Vehicle    │
+   └─────────┘        │ Appointment  │
+                      └──────┬───────┘
+                             │
+                             ▼
+                      ┌──────────────┐
+                      │    Google    │
+                      │   Calendar   │
+                      └──────────────┘
 ```
 
----
-
-## Tech Stack 🛠️
+## Technology Stack
 
 **Backend:**
-- Python 3.11+
-- FastAPI (async web framework)
+- Python 3.11+ with asyncio
+- FastAPI (ASGI web framework)
 - SQLAlchemy 2.0 (async ORM)
 - Uvicorn (ASGI server)
 
 **Voice & AI:**
-- Twilio Media Streams (voice infrastructure)
-- Deepgram STT (nova-2-phonecall model)
-- Deepgram TTS (aura-2-asteria-en voice)
-- OpenAI GPT-4o (conversational AI)
+- Twilio Media Streams (telephony)
+- Deepgram STT (nova-2-phonecall)
+- Deepgram TTS (aura-2-asteria-en)
+- OpenAI GPT-4o (function calling)
 
-**Data & Caching:**
+**Data:**
 - PostgreSQL (Neon Serverless)
-- Redis (sessions & caching)
-- Alembic (database migrations)
-
-**Integrations:**
-- Google Calendar API (OAuth2)
-- APScheduler (cron jobs)
+- Redis (session management)
+- Google Calendar API
 
 **DevOps:**
-- Docker (containerization)
-- Nginx (reverse proxy)
-- Systemd (service management)
+- Docker & Docker Compose
 - GitHub Actions (CI/CD)
+- Systemd (service management)
 
-**Code Quality:**
-- Black (formatting)
-- isort (import sorting)
-- flake8 (linting)
-- mypy (type checking)
-- pytest (testing)
-- bandit (security scanning)
-
----
-
-## Quick Start 🚀
+## Quick Start
 
 ### Prerequisites
+
 - Python 3.11+
 - PostgreSQL 14+ (or Neon account)
 - Redis 6.0+ (or Upstash account)
@@ -141,67 +93,54 @@ Otto's Auto Voice Agent is a production-ready AI voice system that handles:
 
 ### Installation
 
-1. **Clone Repository:**
+1. Clone and setup:
    ```bash
    git clone <repository-url>
    cd automotive-voice
-   ```
-
-2. **Run Automated Setup:**
-   ```bash
    chmod +x scripts/production_setup.sh
    ./scripts/production_setup.sh
    ```
 
-   This script will:
-   - ✅ Validate Python version
-   - ✅ Create virtual environment
-   - ✅ Install all dependencies
-   - ✅ Verify database connection
-   - ✅ Verify Redis connection
-   - ✅ Run database migrations
-   - ✅ Run code quality checks
-   - ✅ Run test suite
-   - ✅ Generate systemd service files (Linux only)
+   The automated setup script will:
+   - Validate Python version
+   - Create virtual environment and install dependencies
+   - Verify database and Redis connections
+   - Run migrations and tests
+   - Generate systemd service files (Linux only)
 
-3. **Configure Environment:**
+2. Configure environment:
    ```bash
    cp .env.example .env
-   # Edit .env with your credentials
+   # Edit .env with your API keys and credentials
    ```
 
-4. **Start Services:**
+3. Start services:
    ```bash
    # Development
    cd server && uvicorn app.main:app --reload
-   
+
    # Production (systemd)
    sudo systemctl start automotive-voice
    sudo systemctl start automotive-worker
    ```
 
-5. **Verify Health:**
+4. Verify health:
    ```bash
    curl http://localhost:8000/health
-   # {"status": "healthy", "database": "connected", "redis": "connected"}
+   # {"status":"healthy","database":"connected","redis":"connected"}
    ```
 
----
+## Configuration
 
-## Configuration ⚙️
-
-### Environment Variables
-
-Create `.env` file with:
+Required environment variables in `.env`:
 
 ```bash
 # Application
 ENV=production
 BASE_URL=https://yourdomain.com
-DEBUG=false
 
 # Database
-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/automotive_voice
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/automotive_voice
 
 # Redis
 REDIS_URL=redis://default:password@host:6379
@@ -223,61 +162,18 @@ GOOGLE_CLIENT_SECRET=your_client_secret
 GOOGLE_REFRESH_TOKEN=your_refresh_token
 
 # Worker
-WORKER_REMINDER_HOUR=18  # 6 PM
+WORKER_REMINDER_HOUR=18
 WORKER_REMINDER_TIMEZONE=America/Chicago
-
-# POC Safety (remove in production)
-# YOUR_TEST_NUMBER=+15555559999
 ```
 
 See `.env.example` for all available options.
 
----
-
-## Usage 💡
-
-### Inbound Call Flow
-
-1. **Customer calls** Twilio phone number
-2. **Twilio webhook** hits `/api/v1/webhooks/inbound-call`
-3. **System looks up customer** by phone number
-4. **WebSocket connection** established for audio streaming
-5. **AI greets customer** and identifies their intent
-6. **Conversation flows** through state machine:
-   - GREETING → VERIFICATION → INTENT_DETECTION → SLOT_COLLECTION → CONFIRMATION → EXECUTION → CLOSING
-7. **Tools execute** (lookup customer, book appointment, etc.)
-8. **Call completes** and session saved
-
-### Example Conversation
-
-**Customer:** "Hi, I need to book an oil change."
-
-**AI:** "Hello! I'd be happy to help you book an oil change. Can I get your phone number to look up your account?"
-
-**Customer:** "555-1234"
-
-**AI:** "Thanks! I found your account, John. I see you have a 2021 Honda Accord. When would you like to bring it in?"
-
-**Customer:** "How about next Tuesday afternoon?"
-
-**AI:** "I have availability next Tuesday at 2 PM, 3 PM, and 4 PM. Which time works best for you?"
-
-**Customer:** "2 PM works."
-
-**AI:** "Perfect! I've booked your oil change for Tuesday, January 16th at 2 PM. You'll receive a reminder call the day before. Is there anything else I can help you with?"
-
-**Customer:** "No, that's all. Thanks!"
-
-**AI:** "You're welcome! Have a great day, and we'll see you next Tuesday!"
-
----
-
-## API Documentation 📚
+## API Documentation
 
 ### Health Check
 ```
 GET /health
-Response: {"status": "healthy", "database": "connected", "redis": "connected"}
+Response: {"status":"healthy","database":"connected","redis":"connected"}
 ```
 
 ### Webhooks
@@ -285,14 +181,14 @@ Response: {"status": "healthy", "database": "connected", "redis": "connected"}
 **Inbound Call:**
 ```
 POST /api/v1/webhooks/inbound-call
-Body: application/x-www-form-urlencoded (Twilio format)
+Content-Type: application/x-www-form-urlencoded
 Response: TwiML with <Connect><Stream>
 ```
 
 **Outbound Reminder:**
 ```
 POST /api/v1/webhooks/outbound-reminder?appointment_id={id}
-Body: application/x-www-form-urlencoded (Twilio format)
+Content-Type: application/x-www-form-urlencoded
 Response: TwiML with appointment details
 ```
 
@@ -305,79 +201,60 @@ Protocol: Twilio Media Streams
 Format: mulaw @ 8kHz
 ```
 
----
+See [docs/API.md](docs/API.md) for complete API reference.
 
-## Testing 🧪
+## Testing
 
-### Run All Tests
+Run all tests:
 ```bash
 cd server
 pytest tests/ -v
 ```
 
-### Run Specific Test Suite
+Run specific test suites:
 ```bash
-# Integration tests only
-pytest tests/test_integration_e2e.py -v
-
-# Load tests only
-pytest tests/test_load_performance.py -v
-
-# Security tests only
-pytest tests/test_security.py -v
+pytest tests/test_integration_e2e.py -v        # Integration tests
+pytest tests/test_load_performance.py -v       # Load tests
+pytest tests/test_security.py -v               # Security tests
 ```
 
-### Test Coverage
+Test coverage:
 ```bash
 pytest --cov=app --cov-report=html
 open htmlcov/index.html
 ```
 
-### Test Summary
-- **100+ tests** covering all features
-- **Integration tests:** Inbound flows, CRM tools, conversation flows
-- **Load tests:** Concurrent operations, connection pooling, scalability
-- **Security tests:** Input validation, data isolation, session security
-- **Performance tests:** All latency targets validated
+**Test Summary:**
+- 100+ tests covering all features
+- Integration tests for voice flows and CRM tools
+- Load tests for concurrency and scalability
+- Security tests for input validation and data isolation
 
----
-
-## Performance Benchmarks ⚡
+## Performance Benchmarks
 
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
-| Customer Lookup (cached) | <2ms | <2ms | ✅ |
-| Customer Lookup (uncached) | <30ms | ~20-30ms | ✅ |
-| STT → LLM | <800ms | ~500ms | ✅ |
-| LLM → TTS | <500ms | ~300ms | ✅ |
-| Barge-in Response | <200ms | ~100ms | ✅ |
-| End-to-End Latency | <2s | ~1.2s | ✅ |
-| Calendar Freebusy | <1s | ~400ms | ✅ |
-| Concurrent Sessions | 10-20 | 100+ | ✅ |
+| Customer Lookup (cached) | <2ms | <2ms | Pass |
+| Customer Lookup (uncached) | <30ms | ~20-30ms | Pass |
+| STT to LLM | <800ms | ~500ms | Pass |
+| LLM to TTS | <500ms | ~300ms | Pass |
+| Barge-in Response | <200ms | ~100ms | Pass |
+| End-to-End Latency | <2s | ~1.2s | Pass |
+| Concurrent Sessions | 10-20 | 100+ | Pass |
 
----
-
-## Deployment 🚀
+## Deployment
 
 ### Option 1: Automated Setup Script
 ```bash
 ./scripts/production_setup.sh
 ```
 
-### Option 2: Docker
+### Option 2: Docker Compose
 ```bash
-# Server
-cd server
-docker build -t automotive-voice-server .
-docker run -d --env-file ../.env -p 8000:8000 automotive-voice-server
-
-# Worker
-cd ../worker
-docker build -t automotive-voice-worker .
-docker run -d --env-file ../.env automotive-voice-worker
+docker-compose up -d
 ```
 
-### Option 3: Railway (Simplest Cloud)
+### Option 3: Railway (Cloud)
 ```bash
 npm install -g @railway/cli
 railway login
@@ -385,25 +262,79 @@ railway init
 railway up
 ```
 
-See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for comprehensive deployment guide covering:
-- Railway, Docker, VPS deployment
+See [docs/deployment.md](docs/deployment.md) for comprehensive deployment guides covering:
+- Railway, Render, Fly.io deployment
+- Docker and VPS setup
 - Nginx reverse proxy configuration
-- SSL/TLS setup with Let's Encrypt
-- Database and Redis setup
+- SSL/TLS with Let's Encrypt
+- Database and Redis provisioning
 - Monitoring and logging
 - Scaling strategies
-- Troubleshooting
 
-See **[PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)** for 100+ pre-launch verification items.
+See [docs/production-checklist.md](docs/production-checklist.md) for 100+ pre-launch verification items.
 
----
+## Project Structure
 
-## Monitoring 📊
-
-### Health Check
-```bash
-curl https://yourdomain.com/health
 ```
+automotive-voice/
+├── server/                 # FastAPI application
+│   ├── app/
+│   │   ├── core/           # Config, database, dependencies
+│   │   ├── models/         # SQLAlchemy models
+│   │   ├── routes/         # API routes and WebSocket handler
+│   │   ├── services/       # STT, TTS, OpenAI, Redis, DB services
+│   │   ├── tools/          # CRM tools (7 function calling tools)
+│   │   └── integrations/   # External API integrations
+│   ├── tests/              # Test suite (100+ tests)
+│   ├── Dockerfile
+│   └── requirements.txt
+├── worker/                 # Background worker for cron jobs
+│   ├── jobs/               # Scheduled tasks
+│   ├── Dockerfile
+│   └── requirements.txt
+├── web/                    # Web dashboard (optional)
+├── scripts/                # Utility scripts
+│   ├── production_setup.sh
+│   ├── init_db.py
+│   └── generate_mock_data.py
+├── docs/                   # Documentation
+│   ├── API.md
+│   ├── ARCHITECTURE.md
+│   ├── deployment.md
+│   ├── production-checklist.md
+│   └── prd.md
+├── infra/                  # Infrastructure configs
+├── .github/                # GitHub Actions workflows
+├── docker-compose.yml
+├── Makefile
+└── README.md
+```
+
+## Development
+
+### Code Quality
+```bash
+# Format and lint
+black server/app/ worker/
+isort server/app/ worker/
+flake8 server/app/ worker/
+mypy server/app/
+bandit -r server/app/
+
+# Pre-commit hooks
+pre-commit install
+pre-commit run --all-files
+```
+
+### Database Migrations
+```bash
+cd server
+alembic revision --autogenerate -m "Description"
+alembic upgrade head
+alembic downgrade -1
+```
+
+## Monitoring
 
 ### Logs
 ```bash
@@ -416,183 +347,39 @@ docker logs -f automotive-voice-server
 docker logs -f automotive-voice-worker
 ```
 
-### Recommended Monitoring Stack
-- **Uptime:** UptimeRobot or Pingdom
+### Recommended Monitoring
+- **Uptime:** UptimeRobot, Pingdom
 - **Errors:** Sentry
 - **Logs:** Better Stack (Logtail)
 - **Metrics:** Prometheus + Grafana
 - **APM:** New Relic
 
----
+## Security
 
-## Security 🔒
+**Production Security Features:**
+- Input validation (phone, email, VIN, state codes)
+- SQL injection prevention (parameterized queries)
+- Timezone-aware datetime handling
+- Session TTL enforcement (1 hour max)
+- Atomic operations (Lua scripts prevent race conditions)
+- Sensitive data masking in logs
+- HTTPS-only in production
+- CORS configuration
 
-### POC Safety
-During POC/testing, the system includes a safety feature:
-```bash
-# In .env
-YOUR_TEST_NUMBER=+15555559999
-```
-This restricts ALL outbound calls to only the test number, preventing accidental calls to real customers.
+**POC Safety:**
+During testing, set `YOUR_TEST_NUMBER` in `.env` to restrict outbound calls to a single test number. Remove before production launch.
 
-**⚠️ REMOVE BEFORE PRODUCTION LAUNCH**
+## Documentation
 
-### Production Security
-- ✅ Input validation (phone, email, VIN, state codes)
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ Timezone-aware datetimes (no timezone bugs)
-- ✅ Session TTL enforcement (1h max)
-- ✅ Atomic operations (prevents race conditions)
-- ✅ Sensitive data masking in logs
-- ✅ HTTPS-only in production
-- ✅ API key rotation support
-- ✅ Rate limiting ready
-- ✅ CORS configuration
+- [API Reference](docs/API.md)
+- [Architecture Details](docs/ARCHITECTURE.md)
+- [Deployment Guide](docs/deployment.md)
+- [Production Checklist](docs/production-checklist.md)
+- [Product Requirements](docs/prd.md)
 
----
+## Contributing
 
-## Troubleshooting 🔧
-
-### Common Issues
-
-**WebSocket Connection Fails:**
-```bash
-# Check Nginx WebSocket configuration
-# Ensure proxy_http_version 1.1 and Upgrade headers set
-```
-
-**Database Connection Pool Exhausted:**
-```python
-# Increase pool size in server/app/core/database.py
-pool_size=30
-max_overflow=60
-```
-
-**Redis Timeouts:**
-```bash
-# Check Redis connection
-redis-cli -h host -p 6379 -a password PING
-```
-
-**High Latency:**
-```bash
-# Check database query performance
-SELECT query, mean_exec_time FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10;
-```
-
-See [DEPLOYMENT.md](./DEPLOYMENT.md#troubleshooting) for comprehensive troubleshooting guide.
-
----
-
-## Project Structure 📁
-
-```
-automotive-voice/
-├── server/                     # FastAPI application
-│   ├── app/
-│   │   ├── core/               # Config, database, dependencies
-│   │   ├── models/             # SQLAlchemy models
-│   │   ├── routes/             # API routes
-│   │   ├── services/           # Core services (STT, TTS, OpenAI, Redis)
-│   │   ├── tools/              # CRM tools (7 tools)
-│   │   └── integrations/       # External integrations
-│   ├── tests/                  # Test suite (100+ tests)
-│   ├── Dockerfile
-│   └── requirements.txt
-├── worker/                     # Background worker
-│   ├── jobs/                   # Cron jobs
-│   ├── Dockerfile
-│   └── requirements.txt
-├── scripts/
-│   └── production_setup.sh     # Automated setup
-├── DEPLOYMENT.md               # Deployment guide (862 lines)
-├── PRODUCTION_CHECKLIST.md     # Launch checklist (539 lines)
-└── README.md                   # This file
-```
-
----
-
-## Development 💻
-
-### Code Quality
-```bash
-# Format code
-black server/app/ worker/
-
-# Sort imports
-isort server/app/ worker/
-
-# Lint
-flake8 server/app/ worker/
-
-# Type check
-mypy server/app/
-
-# Security scan
-bandit -r server/app/
-```
-
-### Pre-commit Hooks
-```bash
-# Install hooks
-pre-commit install
-
-# Run manually
-pre-commit run --all-files
-```
-
-### Database Migrations
-```bash
-# Create migration
-cd server
-alembic revision --autogenerate -m "Description"
-
-# Apply migration
-alembic upgrade head
-
-# Rollback
-alembic downgrade -1
-```
-
----
-
-## Roadmap 🗺️
-
-### ✅ Phase 1: Core Features (Complete)
-- [x] Database schema and models
-- [x] Redis session management
-- [x] Deepgram STT/TTS integration
-- [x] OpenAI GPT-4o integration
-- [x] CRM tools implementation
-- [x] Google Calendar integration
-- [x] WebSocket voice handler
-- [x] Twilio webhooks
-- [x] Conversation flow state machine
-- [x] Outbound reminder worker
-- [x] Testing & validation
-- [x] Deployment documentation
-
-### 🚧 Phase 2: Enhancements (Post-Launch)
-- [ ] Appointment conflict detection
-- [ ] SMS confirmations
-- [ ] Call recording (with consent)
-- [ ] Analytics dashboard
-- [ ] Enhanced error recovery
-- [ ] Multi-location support
-
-### 🔮 Phase 3: Advanced Features (Future)
-- [ ] Multi-language support (Spanish)
-- [ ] Mobile app for customers
-- [ ] Payment processing
-- [ ] Predictive maintenance recommendations
-- [ ] AI sentiment analysis
-- [ ] Self-service customer portal
-
----
-
-## Contributing 🤝
-
-This is a private project for Otto's Auto, but if you're working on it:
+This is a private project for Otto's Auto. If contributing:
 
 1. Follow existing code style (Black, isort)
 2. Write tests for new features
@@ -600,41 +387,20 @@ This is a private project for Otto's Auto, but if you're working on it:
 4. Run pre-commit hooks
 5. Ensure all tests pass
 
----
-
-## Support 📞
-
-**Documentation:**
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide
-- [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) - Pre-launch checklist
-
-**Third-Party Support:**
-- Twilio: https://support.twilio.com
-- Deepgram: https://deepgram.com/contact-us
-- OpenAI: https://help.openai.com
-- Neon: https://neon.tech/docs/introduction/support
-
----
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
 Proprietary - Otto's Auto
 
----
+## Support
 
-## Acknowledgments 🙏
-
-Built with:
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Twilio](https://www.twilio.com/)
-- [Deepgram](https://deepgram.com/)
-- [OpenAI](https://openai.com/)
-- [Google Calendar API](https://developers.google.com/calendar)
-- [Neon](https://neon.tech/)
-- [Redis](https://redis.io/)
+**Third-Party Documentation:**
+- [Twilio Support](https://support.twilio.com)
+- [Deepgram Docs](https://deepgram.com/docs)
+- [OpenAI API](https://platform.openai.com/docs)
+- [Neon Docs](https://neon.tech/docs)
 
 ---
 
-**Made with love for Otto's Auto**
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+Built with [FastAPI](https://fastapi.tiangolo.com/), [Twilio](https://www.twilio.com/), [Deepgram](https://deepgram.com/), [OpenAI](https://openai.com/), and [Google Calendar API](https://developers.google.com/calendar).

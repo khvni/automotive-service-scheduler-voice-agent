@@ -1,0 +1,52 @@
+services:
+  - type: web
+    name: automotive-voice-server
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r server/requirements.txt
+    startCommand: cd server && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENV
+        value: production
+      - fromGroup: automotive-voice-secrets
+
+  - type: worker
+    name: automotive-voice-worker
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r worker/requirements.txt
+    startCommand: cd worker && python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENV
+        value: production
+      - fromGroup: automotive-voice-secrets
+
+envVarGroups:
+  - name: automotive-voice-secrets
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
