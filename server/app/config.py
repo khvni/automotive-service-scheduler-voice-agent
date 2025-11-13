@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     DEEPGRAM_ENDPOINTING: int = 300  # ms
     DEEPGRAM_UTTERANCE_END_MS: int = 1000  # ms
 
+    # Deepgram TTS
+    DEEPGRAM_TTS_MODEL: str = "aura-2-asteria-en"  # Natural female voice
+    DEEPGRAM_TTS_ENCODING: str = "mulaw"  # Twilio audio encoding
+    DEEPGRAM_TTS_SAMPLE_RATE: int = 8000  # Phone quality
+
     # OpenAI
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-realtime-preview-2024-12-17"
