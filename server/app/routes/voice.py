@@ -122,7 +122,7 @@ async def handle_incoming_reminder():
     This endpoint is called by the worker job when making outbound reminder calls.
     The WebSocket handler will detect the reminder context and use appropriate prompts.
     """
-    ws_url = f"wss://{settings.BASE_URL}/api/v1/voice/media-stream"
+    ws_url = f"wss://{settings.BASE_URL.replace('https://', '').replace('http://', '')}/api/v1/voice/media-stream"
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
