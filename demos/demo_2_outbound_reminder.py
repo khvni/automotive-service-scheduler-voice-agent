@@ -254,7 +254,7 @@ async def demonstrate_twilio_api(appointment: Appointment, make_real_call: bool 
         print(f"\n{Colors.BOLD}Outbound call configuration:{Colors.ENDC}")
         print(f"  To: {test_number or 'Not configured'}")
         print(f"  From: {settings.TWILIO_PHONE_NUMBER}")
-        print(f"  Webhook: {settings.BASE_URL}/api/v1/webhooks/outbound-reminder?appointment_id={appointment.id}\n")
+        print(f"  Webhook: {settings.BASE_URL}/api/v1/voice/incoming-reminder?appointment_id={appointment.id}\n")
 
         if make_real_call and test_number:
             # Ask for confirmation before making actual call
@@ -272,7 +272,7 @@ async def demonstrate_twilio_api(appointment: Appointment, make_real_call: bool 
                     call = client.calls.create(
                         to=test_number,
                         from_=settings.TWILIO_PHONE_NUMBER,
-                        url=f"{settings.BASE_URL}/api/v1/webhooks/outbound-reminder?appointment_id={appointment.id}",
+                        url=f"{settings.BASE_URL}/api/v1/voice/incoming-reminder?appointment_id={appointment.id}",
                         method="POST",
                         status_callback=f"{settings.BASE_URL}/api/v1/webhooks/call-status",
                         status_callback_event=["initiated", "ringing", "answered", "completed"]
@@ -498,7 +498,7 @@ async def show_worker_cron_config():
     print("  2. Queries database for appointments 24 hours out")
     print("  3. For each appointment:")
     print("     - Initiates outbound call via Twilio API")
-    print("     - Webhook connects to /api/v1/webhooks/outbound-reminder")
+    print("     - Webhook connects to /api/v1/voice/incoming-reminder")
     print("     - WebSocket establishes media stream")
     print("     - AI handles confirmation or rescheduling")
     print("     - Call log saved to database")
