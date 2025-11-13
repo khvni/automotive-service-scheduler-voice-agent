@@ -103,8 +103,8 @@ class DeepgramSTTService:
             self.connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
             self.connection.on(LiveTranscriptionEvents.Metadata, self._on_metadata)
 
-            # Start the connection
-            if not await self.connection.start(self.live_options):
+            # Start the connection (synchronous call)
+            if not self.connection.start(self.live_options):
                 raise Exception("Failed to start Deepgram connection")
 
             self.is_connected = True
@@ -124,7 +124,8 @@ class DeepgramSTTService:
             while self.is_connected:
                 await asyncio.sleep(10)
                 if self.connection and self.is_connected:
-                    await self.connection.keep_alive()
+                    # keep_alive() is synchronous
+                    self.connection.keep_alive()
                     logger.debug("Sent keepalive to Deepgram")
         except asyncio.CancelledError:
             logger.debug("Keepalive loop cancelled")
@@ -185,10 +186,10 @@ class DeepgramSTTService:
             except asyncio.CancelledError:
                 pass
 
-        # Close connection
+        # Close connection (synchronous call)
         if self.connection:
             try:
-                await self.connection.finish()
+                self.connection.finish()
             except Exception as e:
                 logger.error(f"Error closing Deepgram connection: {e}")
 
