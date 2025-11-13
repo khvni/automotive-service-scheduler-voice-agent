@@ -105,8 +105,7 @@ class DeepgramTTSService(TTSInterface):
         """
         Send text to be converted to speech using REST streaming API.
 
-        Spawns a background task to stream audio chunks, allowing this method
-        to return immediately for low-latency response.
+        This method streams audio chunks to the queue as they arrive.
 
         Args:
             text: Text to synthesize
@@ -117,12 +116,16 @@ class DeepgramTTSService(TTSInterface):
         if not self._is_connected or not self.tts_client:
             raise Exception("Not connected to Deepgram TTS")
 
-        # Spawn background task to stream audio without blocking
-        asyncio.create_task(self._stream_audio(text))
+        logger.info(f"[TTS] Starting synthesis for: '{text[:100]}...'")
+
+        # Call _stream_audio directly and await it
+        await self._stream_audio(text)
+
+        logger.info(f"[TTS] Synthesis complete, audio chunks queued")
 
     async def _stream_audio(self, text: str) -> None:
         """
-        Background task to stream audio from Deepgram TTS.
+        Stream audio from Deepgram TTS.
 
         Streams audio chunks directly to the audio queue as they arrive
         from Deepgram's REST API.
@@ -134,8 +137,10 @@ class DeepgramTTSService(TTSInterface):
             # Track start time for performance metrics
             start_time = time.time()
             first_byte = False
+            total_bytes = 0
+            chunk_count = 0
 
-            logger.debug(f"Streaming TTS audio for: {text[:50]}...")
+            logger.info(f"[TTS] Calling Deepgram REST API for text: '{text[:50]}...'")
 
             # Stream audio using REST API (SDK v3.8.0)
             response = await self.tts_client.stream_raw(
@@ -143,23 +148,28 @@ class DeepgramTTSService(TTSInterface):
                 self.speak_options
             )
 
+            logger.info(f"[TTS] Got response from Deepgram, starting to stream chunks")
+
             # Process the streaming response
             async for chunk in response.aiter_bytes():
                 if chunk:
                     # Track time to first byte
                     if not first_byte:
                         ttfb = (time.time() - start_time) * 1000  # ms
-                        logger.info(f"Deepgram TTS: Time to First Byte = {ttfb:.2f}ms")
+                        logger.info(f"[TTS] Time to First Byte = {ttfb:.2f}ms")
                         first_byte = True
 
                     # Add audio to queue for streaming
                     await self.audio_queue.put(chunk)
-                    logger.debug(f"Deepgram TTS: Queued audio chunk ({len(chunk)} bytes)")
+                    total_bytes += len(chunk)
+                    chunk_count += 1
+                    logger.info(f"[TTS] Queued chunk {chunk_count}: {len(chunk)} bytes (total: {total_bytes} bytes)")
 
-            logger.debug("TTS synthesis complete")
+            total_time = (time.time() - start_time) * 1000
+            logger.info(f"[TTS] Synthesis complete: {chunk_count} chunks, {total_bytes} bytes, {total_time:.2f}ms")
 
         except Exception as e:
-            logger.error(f"Failed to synthesize with Deepgram TTS: {e}")
+            logger.error(f"[TTS] ERROR during synthesis: {e}", exc_info=True)
 
     async def flush(self) -> None:
         """

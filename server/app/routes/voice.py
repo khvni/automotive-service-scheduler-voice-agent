@@ -380,7 +380,7 @@ async def handle_media_stream(websocket: WebSocket):
                     # Handle final transcripts (complete utterances)
                     elif transcript_type == "final" and transcript_data.get("speech_final"):
                         user_message = transcript_text
-                        logger.info(f"USER: {user_message}")
+                        logger.info(f"[VOICE] ===== USER SAID: {user_message} =====")
 
                         # Add to conversation history
                         openai.add_user_message(user_message)
@@ -389,42 +389,49 @@ async def handle_media_stream(websocket: WebSocket):
                         is_speaking = True
                         response_text = ""
 
-                        logger.info("Generating OpenAI response...")
+                        logger.info("[VOICE] Calling OpenAI to generate response...")
 
                         async for event in openai.generate_response(stream=True):
                             if event["type"] == "content_delta":
-                                # Stream text chunk to TTS immediately
+                                # Accumulate text chunks
                                 chunk = event["text"]
                                 response_text += chunk
-                                await tts.send_text(chunk)
+                                logger.info(f"[VOICE] Got OpenAI chunk: '{chunk}'")
 
                             elif event["type"] == "tool_call":
                                 # Tool is being executed (logged by OpenAI service)
                                 tool_name = event["name"]
-                                logger.info(f"Tool executing: {tool_name}")
+                                logger.info(f"[VOICE] Tool executing: {tool_name}")
 
                             elif event["type"] == "tool_result":
                                 # Tool execution completed
-                                logger.info(f"Tool completed: {event.get('call_id')}")
+                                logger.info(f"[VOICE] Tool completed: {event.get('call_id')}")
 
                             elif event["type"] == "error":
                                 # Error in response generation
-                                logger.error(f"OpenAI error: {event['message']}")
+                                logger.error(f"[VOICE] OpenAI ERROR: {event['message']}")
                                 is_speaking = False
                                 break
 
                             elif event["type"] == "done":
                                 # Response generation complete
-                                logger.info(f"ASSISTANT: {response_text}")
+                                logger.info(f"[VOICE] ===== ASSISTANT RESPONSE: {response_text} =====")
+
+                                # Send complete response to TTS once
+                                if response_text.strip():
+                                    logger.info(f"[VOICE] Sending complete response to TTS ({len(response_text)} chars)")
+                                    await tts.send_text(response_text)
+                                    logger.info(f"[VOICE] TTS send_text() returned")
 
                                 # Flush TTS to finalize audio generation
                                 await tts.flush()
                                 break
 
                         # Stream TTS audio to Twilio
-                        # Poll audio queue until no more audio (with timeout)
+                        logger.info("[VOICE] Starting to stream audio chunks to Twilio")
                         consecutive_empty = 0
                         MAX_EMPTY_READS = 50  # 500ms timeout (50 * 10ms)
+                        chunks_sent = 0
 
                         while is_speaking:
                             audio_chunk = await tts.get_audio()
@@ -436,7 +443,7 @@ async def handle_media_stream(websocket: WebSocket):
                                 if consecutive_empty >= MAX_EMPTY_READS:
                                     # No audio for 500ms, assume done
                                     is_speaking = False
-                                    logger.debug("TTS audio stream complete (timeout)")
+                                    logger.info(f"[VOICE] Audio stream complete - sent {chunks_sent} chunks to Twilio")
                                     break
 
                                 # Small delay before next check
@@ -445,6 +452,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                             # Got audio chunk, reset timeout counter
                             consecutive_empty = 0
+                            chunks_sent += 1
 
                             # Send audio to Twilio (base64 encode mulaw)
                             await websocket.send_json(
@@ -456,8 +464,9 @@ async def handle_media_stream(websocket: WebSocket):
                                     },
                                 }
                             )
+                            logger.info(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio ({len(audio_chunk)} bytes)")
 
-                        logger.debug("Audio streaming to Twilio complete")
+                        logger.info(f"[VOICE] Finished streaming {chunks_sent} audio chunks to Twilio")
 
                         # Update session in Redis with conversation history
                         if call_sid:
