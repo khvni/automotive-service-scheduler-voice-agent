@@ -17,19 +17,77 @@ redis_client: Optional[redis.Redis] = None
 SESSION_PREFIX = "session:"
 CUSTOMER_PREFIX = "customer:"
 
+# HIGH FIX: Timeout for Redis operations (2 seconds)
+REDIS_TIMEOUT = 2.0
+
+# CRITICAL FIX: Lua script for atomic session updates
+# This prevents race conditions when multiple processes update the same session
+UPDATE_SESSION_SCRIPT = """
+local key = KEYS[1]
+local ttl_key = KEYS[2]
+local updates = cjson.decode(ARGV[1])
+local timestamp = ARGV[2]
+
+-- Get existing session
+local current = redis.call('GET', key)
+if not current then
+    return nil
+end
+
+-- Parse existing session
+local session = cjson.decode(current)
+
+-- Apply updates
+for k, v in pairs(updates) do
+    session[k] = v
+end
+
+-- Update timestamp
+session['last_updated'] = timestamp
+
+-- Get current TTL
+local ttl = redis.call('TTL', key)
+if ttl <= 0 then
+    ttl = 3600
+end
+
+-- Store updated session with TTL
+redis.call('SETEX', key, ttl, cjson.encode(session))
+return ttl
+"""
+
 
 async def init_redis():
-    """Initialize Redis connection with connection pooling."""
+    """Initialize Redis connection with connection pooling.
+
+    Raises:
+        Exception: If connection fails or cannot be validated
+    """
     global redis_client
-    redis_client = await redis.from_url(
-        settings.REDIS_URL,
-        encoding="utf-8",
-        decode_responses=True,
-        max_connections=50,  # Connection pool size
-        socket_connect_timeout=5,
-        socket_keepalive=True,
-    )
-    logger.info("Redis connection initialized with connection pooling")
+    try:
+        redis_client = await redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True,
+            max_connections=50,  # Connection pool size
+            socket_connect_timeout=5,
+            socket_keepalive=True,
+        )
+
+        # CRITICAL FIX: Validate connection with ping
+        await redis_client.ping()
+        logger.info("Redis connection initialized and validated with connection pooling")
+
+    except Exception as e:
+        # CRITICAL FIX: Clean up and set redis_client to None on failure
+        logger.error(f"Failed to initialize Redis connection: {e}")
+        if redis_client:
+            try:
+                await redis_client.close()
+            except:
+                pass
+        redis_client = None
+        raise Exception(f"Redis connection initialization failed: {e}")
 
 
 async def close_redis():
@@ -104,10 +162,17 @@ async def set_session(call_sid: str, session_data: dict, ttl: int = 3600) -> boo
         # Serialize to JSON
         value = json.dumps(session_data)
 
-        # Store with TTL
-        await redis_client.setex(key, ttl, value)
-        logger.info(f"Session stored: {call_sid} (TTL: {ttl}s)")
-        return True
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            await asyncio.wait_for(
+                redis_client.setex(key, ttl, value),
+                timeout=REDIS_TIMEOUT
+            )
+            logger.info(f"Session stored: {call_sid} (TTL: {ttl}s)")
+            return True
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout storing session {call_sid}")
+            return False
 
     except Exception as e:
         logger.error(f"Error storing session {call_sid}: {e}")
@@ -128,13 +193,23 @@ async def get_session(call_sid: str) -> Optional[dict]:
             return None
 
         key = f"{SESSION_PREFIX}{call_sid}"
-        value = await redis_client.get(key)
 
-        if value:
-            logger.info(f"Session cache hit: {call_sid}")
-            return json.loads(value)
-        else:
-            logger.info(f"Session cache miss: {call_sid}")
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            value = await asyncio.wait_for(
+                redis_client.get(key),
+                timeout=REDIS_TIMEOUT
+            )
+
+            if value:
+                logger.info(f"Session cache hit: {call_sid}")
+                return json.loads(value)
+            else:
+                logger.info(f"Session cache miss: {call_sid}")
+                return None
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout retrieving session {call_sid}")
             return None
 
     except Exception as e:
@@ -143,7 +218,10 @@ async def get_session(call_sid: str) -> Optional[dict]:
 
 
 async def update_session(call_sid: str, updates: dict) -> bool:
-    """Update specific fields in an existing session.
+    """Update specific fields in an existing session using atomic Lua script.
+
+    CRITICAL FIX: Uses Lua script to prevent race conditions during concurrent updates.
+    This ensures atomic read-modify-write operations.
 
     Args:
         call_sid: Twilio call SID
@@ -156,24 +234,35 @@ async def update_session(call_sid: str, updates: dict) -> bool:
         if not _check_redis_initialized():
             return False
 
-        # Get existing session
-        session_data = await get_session(call_sid)
-        if not session_data:
-            logger.warning(f"Cannot update non-existent session: {call_sid}")
-            return False
-
-        # Get remaining TTL
         key = f"{SESSION_PREFIX}{call_sid}"
-        ttl = await redis_client.ttl(key)
-        if ttl <= 0:
-            ttl = 3600  # Default if TTL expired or key doesn't exist
+        timestamp = datetime.now(timezone.utc).isoformat()
 
-        # Merge updates
-        session_data.update(updates)
-        session_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        # CRITICAL FIX: Use Lua script for atomic update
+        # This replaces the get→update→set pattern that was vulnerable to race conditions
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            result = await asyncio.wait_for(
+                redis_client.eval(
+                    UPDATE_SESSION_SCRIPT,
+                    2,  # Number of keys
+                    key,
+                    key,  # ttl_key (not used but required for KEYS array)
+                    json.dumps(updates),
+                    timestamp
+                ),
+                timeout=REDIS_TIMEOUT
+            )
 
-        # Store updated session with original TTL
-        return await set_session(call_sid, session_data, ttl)
+            if result is None:
+                logger.warning(f"Cannot update non-existent session: {call_sid}")
+                return False
+
+            logger.info(f"Session updated atomically: {call_sid}")
+            return True
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout updating session {call_sid}")
+            return False
 
     except Exception as e:
         logger.error(f"Error updating session {call_sid}: {e}")
@@ -194,13 +283,23 @@ async def delete_session(call_sid: str) -> bool:
             return False
 
         key = f"{SESSION_PREFIX}{call_sid}"
-        deleted = await redis_client.delete(key)
 
-        if deleted:
-            logger.info(f"Session deleted: {call_sid}")
-            return True
-        else:
-            logger.warning(f"Session not found for deletion: {call_sid}")
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            deleted = await asyncio.wait_for(
+                redis_client.delete(key),
+                timeout=REDIS_TIMEOUT
+            )
+
+            if deleted:
+                logger.info(f"Session deleted: {call_sid}")
+                return True
+            else:
+                logger.warning(f"Session not found for deletion: {call_sid}")
+                return False
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout deleting session {call_sid}")
             return False
 
     except Exception as e:
@@ -249,10 +348,17 @@ async def cache_customer(phone: str, customer_data: dict, ttl: int = 300) -> boo
         # Serialize to JSON
         value = json.dumps(customer_data)
 
-        # Store with TTL (5 minutes default for frequently changing data)
-        await redis_client.setex(key, ttl, value)
-        logger.info(f"Customer cached: {phone} (TTL: {ttl}s)")
-        return True
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            await asyncio.wait_for(
+                redis_client.setex(key, ttl, value),
+                timeout=REDIS_TIMEOUT
+            )
+            logger.info(f"Customer cached: {phone} (TTL: {ttl}s)")
+            return True
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout caching customer {phone}")
+            return False
 
     except Exception as e:
         logger.error(f"Error caching customer {phone}: {e}")
@@ -273,13 +379,23 @@ async def get_cached_customer(phone: str) -> Optional[dict]:
             return None
 
         key = f"{CUSTOMER_PREFIX}{phone}"
-        value = await redis_client.get(key)
 
-        if value:
-            logger.info(f"Customer cache hit: {phone}")
-            return json.loads(value)
-        else:
-            logger.info(f"Customer cache miss: {phone}")
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            value = await asyncio.wait_for(
+                redis_client.get(key),
+                timeout=REDIS_TIMEOUT
+            )
+
+            if value:
+                logger.info(f"Customer cache hit: {phone}")
+                return json.loads(value)
+            else:
+                logger.info(f"Customer cache miss: {phone}")
+                return None
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout retrieving cached customer {phone}")
             return None
 
     except Exception as e:
@@ -301,13 +417,23 @@ async def invalidate_customer_cache(phone: str) -> bool:
             return False
 
         key = f"{CUSTOMER_PREFIX}{phone}"
-        deleted = await redis_client.delete(key)
 
-        if deleted:
-            logger.info(f"Customer cache invalidated: {phone}")
-            return True
-        else:
-            logger.info(f"Customer cache not found: {phone}")
+        # HIGH FIX: Add timeout to Redis operation
+        try:
+            deleted = await asyncio.wait_for(
+                redis_client.delete(key),
+                timeout=REDIS_TIMEOUT
+            )
+
+            if deleted:
+                logger.info(f"Customer cache invalidated: {phone}")
+                return True
+            else:
+                logger.info(f"Customer cache not found: {phone}")
+                return False
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout invalidating customer cache {phone}")
             return False
 
     except Exception as e:
@@ -331,10 +457,17 @@ async def check_redis_health() -> bool:
             logger.error("Redis client not initialized")
             return False
 
-        # Ping Redis
-        await redis_client.ping()
-        logger.debug("Redis health check: OK")
-        return True
+        # HIGH FIX: Add timeout to Redis ping operation
+        try:
+            await asyncio.wait_for(
+                redis_client.ping(),
+                timeout=REDIS_TIMEOUT
+            )
+            logger.debug("Redis health check: OK")
+            return True
+        except asyncio.TimeoutError:
+            logger.error("Redis health check timed out")
+            return False
 
     except Exception as e:
         logger.error(f"Redis health check failed: {e}")

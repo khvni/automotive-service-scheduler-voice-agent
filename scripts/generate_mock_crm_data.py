@@ -327,7 +327,9 @@ async def generate_appointments(customers: list, vehicles: list):
             actual_cost = None
             if status == AppointmentStatus.COMPLETED:
                 variance = random.uniform(0.9, 1.2)
-                actual_cost = Decimal(float(estimated_cost) * variance).quantize(Decimal('0.01'))
+                # HIGH FIX: Use Decimal(str()) pattern to prevent precision loss
+                # Converting float directly to Decimal can introduce rounding errors
+                actual_cost = (Decimal(str(estimated_cost)) * Decimal(str(variance))).quantize(Decimal('0.01'))
 
             appointment = Appointment(
                 customer_id=customer.id,

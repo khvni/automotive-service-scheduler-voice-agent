@@ -1,5 +1,6 @@
 """Customer model."""
 
+import re
 from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text
 from sqlalchemy.orm import relationship, validates
 
@@ -70,16 +71,56 @@ class Customer(Base, TimestampMixin):
 
     @validates('phone_number')
     def validate_phone_number(self, key, value):
-        """Validate phone number length."""
-        if value and len(value) > 20:
+        """Validate phone number format and length.
+
+        HIGH PRIORITY FIX: Prevents SQL injection by validating phone number format.
+        Only allows digits, spaces, hyphens, parentheses, and plus sign.
+        Enforces 10-15 digit requirement for valid phone numbers.
+        """
+        if not value:
+            return value
+
+        # HIGH FIX: Sanitize and validate phone number format
+        # Remove all whitespace and allowed formatting characters to count digits
+        digits_only = re.sub(r'[\s\-\(\)\+]', '', value)
+
+        # Validate that remaining characters are only digits
+        if not re.match(r'^\d+$', digits_only):
+            raise ValueError(f"Phone number contains invalid characters: {value}")
+
+        # HIGH FIX: Enforce 10-15 digit requirement
+        if len(digits_only) < 10 or len(digits_only) > 15:
+            raise ValueError(f"Phone number must contain 10-15 digits, got {len(digits_only)}")
+
+        # Validate total length including formatting
+        if len(value) > 20:
             raise ValueError(f"Phone number must be <= 20 characters, got {len(value)}")
+
         return value
 
     @validates('email')
     def validate_email(self, key, value):
-        """Validate email length."""
-        if value and len(value) > 255:
+        """Validate email format and length.
+
+        HIGH PRIORITY FIX: Validates email format with regex pattern, not just length.
+        Normalizes email to lowercase for consistency.
+        """
+        if not value:
+            return value
+
+        # HIGH FIX: Normalize to lowercase
+        value = value.lower()
+
+        # Validate length
+        if len(value) > 255:
             raise ValueError(f"Email must be <= 255 characters, got {len(value)}")
+
+        # HIGH FIX: Validate email format with regex
+        # Pattern: local-part@domain with proper character restrictions
+        email_pattern = r'^[a-z0-9]([a-z0-9._-]*[a-z0-9])?@[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$'
+        if not re.match(email_pattern, value):
+            raise ValueError(f"Invalid email format: {value}")
+
         return value
 
     @validates('state')

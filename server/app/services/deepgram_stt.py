@@ -103,19 +103,38 @@ class DeepgramSTTService:
             self.connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
             self.connection.on(LiveTranscriptionEvents.Metadata, self._on_metadata)
 
-            # Start the connection (synchronous call)
-            if not self.connection.start(self.live_options):
-                raise Exception("Failed to start Deepgram connection")
+            # CRITICAL FIX: Add try/except around connection.start() to prevent resource leaks
+            try:
+                # Start the connection (synchronous call)
+                if not self.connection.start(self.live_options):
+                    raise Exception("Failed to start Deepgram connection")
 
-            self.is_connected = True
+                self.is_connected = True
 
-            # Start keepalive task
-            self.keepalive_task = asyncio.create_task(self._keepalive_loop())
+                # Start keepalive task
+                self.keepalive_task = asyncio.create_task(self._keepalive_loop())
 
-            logger.info("Connected to Deepgram STT")
+                logger.info("Connected to Deepgram STT")
+
+            except Exception as start_error:
+                # CRITICAL FIX: Clean up connection/client on failure to prevent resource leaks
+                logger.error(f"Failed to start Deepgram connection: {start_error}")
+                if self.connection:
+                    try:
+                        self.connection.finish()
+                    except:
+                        pass
+                    self.connection = None
+                self.client = None
+                self.is_connected = False
+                raise
 
         except Exception as e:
             logger.error(f"Failed to connect to Deepgram: {e}")
+            # CRITICAL FIX: Ensure cleanup on any failure
+            self.connection = None
+            self.client = None
+            self.is_connected = False
             raise
 
     async def _keepalive_loop(self) -> None:
