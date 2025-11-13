@@ -449,10 +449,19 @@ async def verify_call_logging(db, customer: Customer):
 
     print_step(4, "Demonstrating call logging")
 
+    # Delete any existing demo call log first
+    demo_call_sid = "CA_demo_outbound_123"
+    result = await db.execute(select(CallLog).where(CallLog.call_sid == demo_call_sid))
+    existing_call_log = result.scalar_one_or_none()
+    if existing_call_log:
+        await db.delete(existing_call_log)
+        await db.commit()
+        print_info("Cleaned up existing demo call log")
+
     # Create a sample call log
     call_log = CallLog(
         customer_id=customer.id,
-        call_sid="CA_demo_outbound_123",
+        call_sid=demo_call_sid,
         direction=CallDirection.OUTBOUND,
         from_number=settings.TWILIO_PHONE_NUMBER,
         to_number=customer.phone_number,
