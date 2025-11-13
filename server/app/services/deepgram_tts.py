@@ -99,12 +99,9 @@ class DeepgramTTSService(TTSInterface):
             config = DeepgramClientOptions(options={"keepalive": "true"})
             self.client = DeepgramClient(self.api_key, config)
 
-            # Create speak connection with Twilio-compatible settings
-            self.connection = self.client.speak.v1.connect(
-                model=self.model,
-                encoding=self.encoding,
-                sample_rate=self.sample_rate,
-            )
+            # Create speak connection with Twilio-compatible settings (SDK v3.8.0)
+            # Use asyncwebsocket.v("1") for async TTS operations
+            self.connection = self.client.speak.asyncwebsocket.v("1")
 
             # Set up event listeners
             self.connection.on(EventType.OPEN, self._on_open)
@@ -112,11 +109,15 @@ class DeepgramTTSService(TTSInterface):
             self.connection.on(EventType.CLOSE, self._on_close)
             self.connection.on(EventType.ERROR, self._on_error)
 
-            # Start the connection (enter async context)
-            await self.connection.__aenter__()
+            # Start the connection with options (SDK v3.8.0)
+            options = {
+                "model": self.model,
+                "encoding": self.encoding,
+                "sample_rate": self.sample_rate,
+            }
 
-            # Start listening for messages
-            await self.connection.start_listening()
+            if not await self.connection.start(options):
+                raise Exception("Failed to start Deepgram TTS connection")
 
             self._is_connected = True
 
@@ -151,9 +152,8 @@ class DeepgramTTSService(TTSInterface):
                 self.tts_start_time = time.time()
                 self.first_byte_received = False
 
-            # Send text message
-            message = SpeakV1TextMessage(text=text)
-            await self.connection.send_text(message)
+            # Send text message (SDK v3.8.0 uses plain string)
+            await self.connection.send_text(text)
 
             logger.debug(f"Sent text to TTS: {text[:50]}...")
 
@@ -173,8 +173,8 @@ class DeepgramTTSService(TTSInterface):
             return
 
         try:
-            message = SpeakV1ControlMessage(type="Flush")
-            await self.connection.send_control(message)
+            # SDK v3.8.0 uses plain flush method
+            await self.connection.flush()
             logger.debug("Sent Flush command to Deepgram TTS")
 
         except Exception as e:
@@ -195,10 +195,9 @@ class DeepgramTTSService(TTSInterface):
                 except asyncio.QueueEmpty:
                     break
 
-            # Send clear command to Deepgram if connected
+            # Send clear command to Deepgram if connected (SDK v3.8.0)
             if self._is_connected and self.connection:
-                message = SpeakV1ControlMessage(type="Clear")
-                await self.connection.send_control(message)
+                await self.connection.clear()
                 logger.debug("Sent Clear command to Deepgram TTS (barge-in)")
 
             # Reset timing metrics
@@ -231,10 +230,10 @@ class DeepgramTTSService(TTSInterface):
 
         self._is_connected = False
 
-        # Close connection (exit async context)
+        # Close connection (SDK v3.8.0 uses finish method)
         if self.connection:
             try:
-                await self.connection.__aexit__(None, None, None)
+                self.connection.finish()
             except Exception as e:
                 logger.error(f"Error closing Deepgram TTS connection: {e}")
 

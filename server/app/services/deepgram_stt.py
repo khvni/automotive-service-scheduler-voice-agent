@@ -213,12 +213,13 @@ class DeepgramSTTService:
         logger.info("Deepgram STT connection closed")
 
     # Event handlers
+    # NOTE: These must be synchronous (not async) for Deepgram SDK v3.8.0
 
-    async def _on_open(self, *args, **kwargs) -> None:
+    def _on_open(self, *args, **kwargs) -> None:
         """Handle connection open event."""
         logger.info("Deepgram STT: Connected")
 
-    async def _on_transcript(self, *args, **kwargs) -> None:
+    def _on_transcript(self, *args, **kwargs) -> None:
         """
         Handle transcript event.
 
@@ -248,42 +249,51 @@ class DeepgramSTTService:
 
                 logger.info(f"Deepgram STT: [Speech Final] {utterance}")
 
-                # Add to queue for processing
-                await self.transcript_queue.put(
-                    {
-                        "type": "final",
-                        "text": utterance,
-                        "is_final": True,
-                        "speech_final": True,
-                    }
-                )
+                # Add to queue for processing (use sync put_nowait)
+                try:
+                    self.transcript_queue.put_nowait(
+                        {
+                            "type": "final",
+                            "text": utterance,
+                            "is_final": True,
+                            "speech_final": True,
+                        }
+                    )
+                except asyncio.QueueFull:
+                    logger.warning("Transcript queue full, dropping message")
             else:
                 logger.debug(f"Deepgram STT: [Is Final] {transcript}")
 
-                # Add to queue but not speech final
-                await self.transcript_queue.put(
-                    {
-                        "type": "final",
-                        "text": transcript,
-                        "is_final": True,
-                        "speech_final": False,
-                    }
-                )
+                # Add to queue but not speech final (use sync put_nowait)
+                try:
+                    self.transcript_queue.put_nowait(
+                        {
+                            "type": "final",
+                            "text": transcript,
+                            "is_final": True,
+                            "speech_final": False,
+                        }
+                    )
+                except asyncio.QueueFull:
+                    logger.warning("Transcript queue full, dropping message")
         else:
             # Interim results - used for barge-in detection
             logger.debug(f"Deepgram STT: [Interim Result] {transcript}")
 
-            # Add to queue for barge-in detection
-            await self.transcript_queue.put(
-                {
-                    "type": "interim",
-                    "text": transcript,
-                    "is_final": False,
-                    "speech_final": False,
-                }
-            )
+            # Add to queue for barge-in detection (use sync put_nowait)
+            try:
+                self.transcript_queue.put_nowait(
+                    {
+                        "type": "interim",
+                        "text": transcript,
+                        "is_final": False,
+                        "speech_final": False,
+                    }
+                )
+            except asyncio.QueueFull:
+                logger.warning("Transcript queue full, dropping interim result")
 
-    async def _on_utterance_end(self, *args, **kwargs) -> None:
+    def _on_utterance_end(self, *args, **kwargs) -> None:
         """
         Handle utterance end event.
 
@@ -298,32 +308,35 @@ class DeepgramSTTService:
 
             logger.info(f"Deepgram STT: [Speech Final via UtteranceEnd] {utterance}")
 
-            # Add to queue
-            await self.transcript_queue.put(
-                {
-                    "type": "final",
-                    "text": utterance,
-                    "is_final": True,
-                    "speech_final": True,
-                }
-            )
+            # Add to queue (use sync put_nowait)
+            try:
+                self.transcript_queue.put_nowait(
+                    {
+                        "type": "final",
+                        "text": utterance,
+                        "is_final": True,
+                        "speech_final": True,
+                    }
+                )
+            except asyncio.QueueFull:
+                logger.warning("Transcript queue full, dropping utterance end")
 
-    async def _on_close(self, *args, **kwargs) -> None:
+    def _on_close(self, *args, **kwargs) -> None:
         """Handle connection close event."""
         logger.info("Deepgram STT: Disconnected")
         self.is_connected = False
 
-    async def _on_error(self, *args, **kwargs) -> None:
+    def _on_error(self, *args, **kwargs) -> None:
         """Handle error event."""
         error = kwargs.get("error") or (args[1] if len(args) > 1 else args[0])
         logger.error(f"Deepgram STT: Error received: {error}")
 
-    async def _on_warning(self, *args, **kwargs) -> None:
+    def _on_warning(self, *args, **kwargs) -> None:
         """Handle warning event."""
         warning = kwargs.get("warning") or (args[1] if len(args) > 1 else args[0])
         logger.warning(f"Deepgram STT: Warning received: {warning}")
 
-    async def _on_metadata(self, *args, **kwargs) -> None:
+    def _on_metadata(self, *args, **kwargs) -> None:
         """Handle metadata event."""
         metadata = kwargs.get("metadata") or (args[1] if len(args) > 1 else args[0])
         logger.debug(f"Deepgram STT: Metadata received: {metadata}")
