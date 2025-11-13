@@ -1,5 +1,6 @@
 """Redis client for session and state management."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone

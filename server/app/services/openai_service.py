@@ -70,6 +70,10 @@ class OpenAIService:
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
 
+        # Tool call depth tracking to prevent infinite recursion
+        self.max_tool_call_depth = 5
+        self._current_tool_depth = 0
+
         logger.info(f"OpenAIService initialized with model: {model}")
 
     def set_system_prompt(self, prompt: str) -> None:
@@ -236,6 +240,10 @@ class OpenAIService:
         Yields:
             Event dicts as described above
         """
+        # Reset depth counter for new conversation turn (only at top level)
+        if self._current_tool_depth == 0:
+            logger.debug("Starting new conversation turn, depth counter reset")
+
         try:
             # Create chat completion request
             request_params = {
@@ -336,8 +344,24 @@ class OpenAIService:
 
                         # Make recursive call to generate verbal response based on tool results
                         logger.info("Tool execution complete, generating verbal response")
+
+                        # Check depth limit before recursive call
+                        self._current_tool_depth += 1
+                        if self._current_tool_depth > self.max_tool_call_depth:
+                            logger.error(f"Max tool call depth ({self.max_tool_call_depth}) exceeded")
+                            yield {
+                                "type": "error",
+                                "message": f"Maximum tool execution depth ({self.max_tool_call_depth}) exceeded. Possible infinite loop."
+                            }
+                            self._current_tool_depth -= 1
+                            return
+
+                        # Recursive call with depth tracking
                         async for event in self.generate_response(stream=stream):
                             yield event
+
+                        # Decrement depth after recursive call completes
+                        self._current_tool_depth -= 1
                         return
 
                     elif finish_reason == "stop":
