@@ -29,9 +29,21 @@ async def db_health_check(db: AsyncSession = Depends(get_db)):
 @router.get("/health/redis")
 async def redis_health_check():
     """Redis health check."""
+    from app.services.redis_client import check_redis_health
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
     try:
-        redis_client = get_redis()
-        await redis_client.ping()
-        return {"status": "healthy", "redis": "connected"}
+        is_healthy = await check_redis_health()
+        if is_healthy:
+            return {"status": "healthy", "redis": "connected"}
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "unhealthy", "redis": "disconnected"}
+            )
     except Exception as e:
-        return {"status": "unhealthy", "redis": "disconnected", "error": str(e)}
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "redis": "disconnected", "error": str(e)}
+        )
