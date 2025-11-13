@@ -10,13 +10,20 @@ import logging
 import time
 from typing import Optional
 
-from deepgram import AsyncDeepgramClient, DeepgramClientOptions
-from deepgram.core.events import EventType
-from deepgram.extensions.types.sockets import (
-    SpeakV1ControlMessage,
-    SpeakV1SocketClientResponse,
-    SpeakV1TextMessage,
-)
+from deepgram import DeepgramClient, DeepgramClientOptions
+try:
+    from deepgram.core.events import EventType
+    from deepgram.extensions.types.sockets import (
+        SpeakV1ControlMessage,
+        SpeakV1SocketClientResponse,
+        SpeakV1TextMessage,
+    )
+except ImportError:
+    # Deepgram SDK 3.8.0 has different imports
+    EventType = None
+    SpeakV1ControlMessage = dict
+    SpeakV1SocketClientResponse = dict
+    SpeakV1TextMessage = dict
 
 from .tts_interface import TTSInterface
 
@@ -55,7 +62,7 @@ class DeepgramTTSService(TTSInterface):
         self.encoding = encoding
         self.sample_rate = sample_rate
 
-        self.client: Optional[AsyncDeepgramClient] = None
+        self.client: Optional[DeepgramClient] = None
         self.connection = None
         self.audio_queue: asyncio.Queue = asyncio.Queue()
         self._is_connected = False
@@ -88,9 +95,9 @@ class DeepgramTTSService(TTSInterface):
             Exception: If connection fails
         """
         try:
-            # Create async Deepgram client
+            # Create Deepgram client (handles both sync and async)
             config = DeepgramClientOptions(options={"keepalive": "true"})
-            self.client = AsyncDeepgramClient(self.api_key, config)
+            self.client = DeepgramClient(self.api_key, config)
 
             # Create speak connection with Twilio-compatible settings
             self.connection = self.client.speak.v1.connect(
