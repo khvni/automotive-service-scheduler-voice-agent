@@ -28,7 +28,8 @@ from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
-from app.services.database import async_session_maker, init_db
+from app.services import database
+from app.services.database import init_db
 from app.tools.crm_tools import (
     book_appointment,
     get_available_slots,
@@ -382,7 +383,7 @@ async def main():
         await init_db()
         print_success("Database connected")
 
-        async with async_session_maker() as db:
+        async with database.async_session_maker() as db:
             # Setup test data
             customer = await setup_test_customer(db)
 
