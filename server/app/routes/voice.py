@@ -380,7 +380,9 @@ async def handle_media_stream(websocket: WebSocket):
                             logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking")
 
                             # Clear Twilio audio playback immediately
-                            await websocket.send_json({"event": "clear", "streamSid": stream_sid})
+                            await websocket.send_text(
+                                json.dumps({"event": "clear", "streamSid": stream_sid})
+                            )
 
                             # Clear TTS audio queue
                             await tts.clear()
@@ -421,14 +423,14 @@ async def handle_media_stream(websocket: WebSocket):
                                         chunks_sent += 1
 
                                         # Send audio to Twilio (base64 encode mulaw)
-                                        await websocket.send_json(
-                                            {
+                                        await websocket.send_text(
+                                            json.dumps({
                                                 "event": "media",
                                                 "streamSid": stream_sid,
                                                 "media": {
                                                     "payload": base64.b64encode(audio_chunk).decode("utf-8")
                                                 },
-                                            }
+                                            })
                                         )
                                         logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio")
 
@@ -546,7 +548,9 @@ async def handle_media_stream(websocket: WebSocket):
         try:
             if websocket and stream_sid:
                 # Clear any pending audio
-                await websocket.send_json({"event": "clear", "streamSid": stream_sid})
+                await websocket.send_text(
+                    json.dumps({"event": "clear", "streamSid": stream_sid})
+                )
 
                 # Note: We cannot easily send TTS audio here since services may be broken
                 # In production, consider having a pre-recorded error message
