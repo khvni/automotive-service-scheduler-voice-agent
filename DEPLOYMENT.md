@@ -1,4 +1,4 @@
-# Deployment Guide - Bart's Automotive Voice Agent
+# Deployment Guide - Otto's Auto Voice Agent
 
 ## Table of Contents
 1. [Prerequisites](#prerequisites)
@@ -323,7 +323,7 @@ redis-cli CONFIG SET tcp-backlog 511
 2. **Service Configuration:**
    ```ini
    [Unit]
-   Description=Bart's Automotive Voice Agent
+   Description=Otto's Auto Voice Agent
    After=network.target postgresql.service redis.service
 
    [Service]

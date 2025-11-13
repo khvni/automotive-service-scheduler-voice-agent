@@ -7,7 +7,7 @@
 ## Executive Summary
 
 **Files Reviewed:** 9 files (3 implementation + 3 test + 3 integration)
-**Issues Found:** 
+**Issues Found:**
 - CRITICAL: 3
 - HIGH: 7
 - MEDIUM: 8
@@ -73,20 +73,20 @@ async def book_appointment(
     ...
 ):
     # ... existing customer/vehicle validation ...
-    
+
     # Create appointment in database
     appointment = Appointment(...)
     db.add(appointment)
     await db.commit()
     await db.refresh(appointment)
-    
+
     # Create calendar event if calendar service provided
     if calendar:
         calendar_result = await calendar.create_calendar_event(...)
         if calendar_result['success']:
             appointment.calendar_event_id = calendar_result['event_id']
             await db.commit()
-    
+
     return {...}
 ```
 
@@ -183,14 +183,14 @@ try:
     calendar_result = await calendar.create_calendar_event(...)
     if not calendar_result['success']:
         return {'success': False, ...}
-    
+
     event_id = calendar_result['event_id']
-    
+
     # Create database appointment
     appointment = Appointment(...)
     db.add(appointment)
     await db.commit()
-    
+
 except Exception as e:
     # CRITICAL: Clean up calendar event on database failure
     if event_id:
@@ -215,9 +215,9 @@ db = None
 try:
     db_gen = get_db()
     db = await db_gen.__anext__()
-    
+
     # ... use db ...
-    
+
 finally:
     if db:
         try:
@@ -273,14 +273,14 @@ async def _execute_tool(self, function_name: str, function_arguments: str) -> st
                 "message": "Tool not available"
             }
             return json.dumps(error_result)
-        
+
         result = await handler(**args)
-        
+
         # Validate result has success key
         if isinstance(result, dict) and 'success' not in result:
             logger.warning(f"Tool {function_name} missing 'success' key")
             result['success'] = True  # Assume success if not specified
-        
+
         return json.dumps(result)
 ```
 
@@ -320,7 +320,7 @@ async def book_appointment(...):
             "error": f"Invalid service_type. Must be one of: {', '.join(valid_types)}",
             "message": "Invalid service type"
         }
-    
+
     # THEN validate customer/vehicle (avoid wasted DB queries)
     customer = await db.get(Customer, customer_id)
     # ...
@@ -387,7 +387,7 @@ async def connect(self, max_retries: int = 3) -> None:
 **Fix:**
 ```python
 async def get_upcoming_appointments(
-    db: AsyncSession, 
+    db: AsyncSession,
     customer_id: int,
     limit: int = 10  # Add limit
 ) -> Dict[str, Any]:
@@ -420,7 +420,7 @@ async def get_upcoming_appointments(
 if customer:
     # Store in session state (in addition to Redis)
     session_customer = customer
-    
+
 # In tool execution:
 # Tools should accept customer_id from session instead of looking up again
 ```

@@ -1,4 +1,4 @@
-# Bart's Automotive Voice Agent 🚗🤖
+# Otto's Auto Voice Agent 🚗🤖
 
 **AI-powered voice agent for automotive dealership appointment booking and customer service**
 
@@ -12,7 +12,7 @@
 
 ## Overview
 
-Bart's Automotive Voice Agent is a production-ready AI voice system that handles:
+Otto's Auto Voice Agent is a production-ready AI voice system that handles:
 
 - 📞 **Inbound Calls:** Customers call to book, reschedule, or cancel appointments
 - 📱 **Outbound Reminders:** Automated reminder calls 24 hours before appointments
@@ -592,7 +592,7 @@ alembic downgrade -1
 
 ## Contributing 🤝
 
-This is a private project for Bart's Automotive, but if you're working on it:
+This is a private project for Otto's Auto, but if you're working on it:
 
 1. Follow existing code style (Black, isort)
 2. Write tests for new features
@@ -618,7 +618,7 @@ This is a private project for Bart's Automotive, but if you're working on it:
 
 ## License
 
-Proprietary - Bart's Automotive
+Proprietary - Otto's Auto
 
 ---
 
@@ -635,6 +635,6 @@ Built with:
 
 ---
 
-**Made with ❤️ for Bart's Automotive**
+**Made with love for Otto's Auto**
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

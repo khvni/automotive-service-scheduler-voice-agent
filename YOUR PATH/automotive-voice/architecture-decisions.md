@@ -8,7 +8,7 @@
 ### 1. Runtime Stack
 - **Language:** Python
 - **Framework:** FastAPI + asyncio
-- **Rationale:** 
+- **Rationale:**
   - Majority of reference implementations (Twilio, Deepgram, Google Calendar) are in Python
   - Clean async/await model for WebSocket handling
   - Rich ecosystem for audio/telephony integrations
@@ -21,12 +21,12 @@
   - Better phone audio handling than OpenAI
   - Superior barge-in detection via interim results
   - 8kHz mulaw optimization for telephony
-  
+
 - **LLM:** OpenAI GPT-4o
   - Standard function calling (not Realtime API)
   - Reasoning and tool orchestration
   - Proven reliability for conversational AI
-  
+
 - **TTS:** Deepgram (aura-*)
   - Low latency streaming
   - Phone-optimized voices
@@ -218,15 +218,15 @@ for appt in appointments:
 1. **twilio-samples/speech-assistant-openai-realtime-api-python**
    - Clean FastAPI + asyncio implementation
    - Interruption handling pattern (lines 141-168)
-   
+
 2. **deepgram/deepgram-twilio-streaming-voice-agent**
    - Deepgram STT/TTS integration
    - Barge-in detection (line 310: interim results trigger clear)
-   
+
 3. **duohub-ai/google-calendar-voice-agent**
    - Google Calendar async wrapper pattern
    - Pipecat framework (optional reference)
-   
+
 4. **Barty-Bart/openai-realtime-api-voice-assistant-V2**
    - Session management patterns
    - Inline function execution examples
@@ -260,5 +260,5 @@ for appt in appointments:
 
 ---
 
-**Last Updated:** 2025-01-12  
+**Last Updated:** 2025-01-12
 **Status:** Architecture Approved, Ready for Implementation

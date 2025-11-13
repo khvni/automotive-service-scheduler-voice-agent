@@ -28,7 +28,7 @@ if data['event'] == 'media':
         "type": "input_audio_buffer.append",
         "audio": data['media']['payload']
     }
-    
+
 # Interruption handling
 async def handle_speech_started_event():
     if mark_queue and response_start_timestamp_twilio is not None:
@@ -200,22 +200,22 @@ def get_calendar_service(self):
 ```python
 async def get_free_availability(self, start_time_str, end_time_str):
     service = self.get_calendar_service()
-    
+
     start_time = datetime.fromisoformat(start_time_str).replace(tzinfo=self.aedt)
     end_time = datetime.fromisoformat(end_time_str).replace(tzinfo=self.aedt)
-    
+
     # Freebusy query
     body = {
         'timeMin': start_time_utc.isoformat(),
         'timeMax': end_time_utc.isoformat(),
         'items': [{'id': 'primary'}]
     }
-    
+
     freebusy_response = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.freebusy().query(body=body).execute()
     )
-    
+
     # Calculate free slots from busy periods
     free_slots = self._process_freebusy_response(freebusy_response, start_time, end_time)
 ```
@@ -224,10 +224,10 @@ async def get_free_availability(self, start_time_str, end_time_str):
 ```python
 async def create_calendar_event(self, title, start_time_str, description='', attendees=None):
     service = self.get_calendar_service()
-    
+
     start_time = self._parse_start_time(start_time_str)
     end_time = start_time + timedelta(minutes=30)
-    
+
     event = {
         'summary': title,
         'description': description,
@@ -240,7 +240,7 @@ async def create_calendar_event(self, title, start_time_str, description='', att
             'timeZone': 'UTC',
         },
     }
-    
+
     event = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.events().insert(calendarId='primary', body=event, sendUpdates='all').execute()
@@ -251,18 +251,18 @@ async def create_calendar_event(self, title, start_time_str, description='', att
 ```python
 async def update_calendar_event(self, event_id, title=None, description=None, start_time_str=None):
     service = self.get_calendar_service()
-    
+
     # Get existing event
     event = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.events().get(calendarId='primary', eventId=event_id).execute()
     )
-    
+
     # Update fields
     if title:
         event['summary'] = title
     # ... update other fields
-    
+
     updated_event = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.events().update(
@@ -279,7 +279,7 @@ async def update_calendar_event(self, event_id, title=None, description=None, st
 def _parse_start_time(self, start_time_str):
     now = datetime.now(self.aedt)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     if "this afternoon" in start_time_str.lower():
         return today.replace(hour=14, minute=0)
     else:
@@ -358,20 +358,20 @@ tools: [
 if (response.type === 'response.function_call_arguments.done') {
     const functionName = response.name;
     const args = JSON.parse(response.arguments);
-    
+
     if (functionName === 'question_and_answer') {
         const question = args.question;
-        
+
         // Inline webhook call
         const webhookResponse = await sendToWebhook({
             route: "3",
             data1: question,
             data2: threadId
         });
-        
+
         const parsedResponse = JSON.parse(webhookResponse);
         const answerMessage = parsedResponse.message;
-        
+
         // Return result to OpenAI
         const functionOutputEvent = {
             type: "conversation.item.create",

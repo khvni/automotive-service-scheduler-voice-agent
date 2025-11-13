@@ -30,7 +30,7 @@ router = APIRouter()
 
 
 # System prompt for the AI assistant
-SYSTEM_PROMPT = """You are Sophie, a friendly and professional receptionist at Bart's Automotive,
+SYSTEM_PROMPT = """You are Sophie, a friendly and professional receptionist at Otto's Auto,
 a full-service automotive repair shop.
 
 Your role:

@@ -1,1 +1,1 @@
-"""Test suite for Bart's Automotive Voice Agent."""
+"""Test suite for Otto's Auto Voice Agent."""

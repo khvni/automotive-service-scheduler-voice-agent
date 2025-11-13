@@ -199,10 +199,10 @@ All prompts include:
 if (response.type === 'response.function_call_arguments.done') {
     // Execute tool
     const result = await executeFunction(name, args);
-    
+
     // Add result to conversation
     addFunctionOutput(result);
-    
+
     // Generate verbal response
     createResponse();
 }
@@ -245,11 +245,11 @@ if (response.type === 'response.function_call_arguments.done') {
 ```python
 async for chunk in response_stream:
     delta = chunk.choices[0].delta
-    
+
     # Handle content
     if delta.content:
         yield {"type": "content_delta", "text": delta.content}
-    
+
     # Handle tool calls
     if delta.tool_calls:
         # Accumulate tool call deltas

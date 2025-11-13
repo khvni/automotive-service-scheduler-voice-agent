@@ -25,20 +25,20 @@ Feature 2 has been successfully implemented, providing comprehensive Redis-based
    - Automatically adds `created_at` and `last_updated` timestamps
    - Uses JSON serialization for complex nested data
    - Key format: `session:{call_sid}`
-   
+
 2. **`get_session(call_sid: str) -> Optional[dict]`**
    - Retrieves session state from Redis
    - Returns None if not found (cache miss)
    - Deserializes JSON automatically
    - Logs cache hits/misses for monitoring
-   
+
 3. **`update_session(call_sid: str, updates: dict)`**
    - Atomically updates specific session fields
    - Preserves original TTL duration
    - Merges updates with existing data
    - Updates `last_updated` timestamp automatically
    - Returns False if session doesn't exist
-   
+
 4. **`delete_session(call_sid: str)`**
    - Cleans up session when call ends
    - Returns True if deleted, False if not found
@@ -51,12 +51,12 @@ Feature 2 has been successfully implemented, providing comprehensive Redis-based
    - Default TTL: 5 minutes (300 seconds)
    - Automatically adds `cached_at` timestamp
    - Key format: `customer:{phone}`
-   
+
 2. **`get_cached_customer(phone: str) -> Optional[dict]`**
    - Retrieves cached customer data
    - Returns None on cache miss
    - Logs cache hits/misses for monitoring
-   
+
 3. **`invalidate_customer_cache(phone: str)`**
    - Clears customer cache (e.g., after data update)
    - Returns True if deleted, False if not found
@@ -86,18 +86,18 @@ Feature 2 has been successfully implemented, providing comprehensive Redis-based
 1. **Health Check Test**
    - Verifies Redis connectivity
    - Confirms PING response
-   
+
 2. **Session Management Test**
    - Creates session with complete data structure
    - Retrieves and validates session data
    - Updates session fields (state, intent, collected_data)
    - Deletes session and verifies removal
-   
+
 3. **Customer Caching Test**
    - Caches customer with vehicles and appointments
    - Retrieves and validates cached data
    - Invalidates cache and verifies removal
-   
+
 4. **TTL Expiration Test**
    - Creates session with 3-second TTL
    - Verifies session exists immediately
@@ -277,13 +277,13 @@ Feature 2 has been successfully implemented, providing comprehensive Redis-based
        "current_state": "greeting",
        ...
    })
-   
+
    # During conversation
    await update_session(call_sid, {
        "current_state": "collecting_info",
        "intent": "book_appointment"
    })
-   
+
    # On call end
    await delete_session(call_sid)
    ```
@@ -307,7 +307,7 @@ Feature 2 has been successfully implemented, providing comprehensive Redis-based
        customer = await get_cached_customer(phone)
        if customer:
            return customer
-       
+
        # Cache miss - query database
        customer = await db.query(Customer).filter_by(phone=phone).first()
        if customer:

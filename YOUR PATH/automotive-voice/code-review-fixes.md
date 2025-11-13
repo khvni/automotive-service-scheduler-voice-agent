@@ -69,7 +69,7 @@ return ttl
 
 async def update_session(call_sid: str, updates: dict) -> bool:
     result = await asyncio.wait_for(
-        redis_client.eval(UPDATE_SESSION_SCRIPT, 2, key, key, 
+        redis_client.eval(UPDATE_SESSION_SCRIPT, 2, key, key,
                          json.dumps(updates), timestamp),
         timeout=REDIS_TIMEOUT
     )
@@ -90,7 +90,7 @@ async def connect(self) -> None:
         self.client = DeepgramClient(self.api_key, config)
         self.connection = self.client.listen.websocket.v("1")
         # Set up event listeners...
-        
+
         # CRITICAL FIX: Add try/except around connection.start()
         try:
             if not self.connection.start(self.live_options):
@@ -131,18 +131,18 @@ async def connect(self) -> None:
 def validate_phone_number(self, key, value):
     if not value:
         return value
-    
+
     # HIGH FIX: Remove formatting and count digits
     digits_only = re.sub(r'[\s\-\(\)\+]', '', value)
-    
+
     # Validate only digits remain
     if not re.match(r'^\d+$', digits_only):
         raise ValueError(f"Phone number contains invalid characters: {value}")
-    
+
     # HIGH FIX: Enforce 10-15 digit requirement
     if len(digits_only) < 10 or len(digits_only) > 15:
         raise ValueError(f"Phone number must contain 10-15 digits, got {len(digits_only)}")
-    
+
     return value
 ```
 
@@ -213,18 +213,18 @@ actual_cost = (Decimal(str(estimated_cost)) * Decimal(str(variance))).quantize(D
 def validate_email(self, key, value):
     if not value:
         return value
-    
+
     # HIGH FIX: Normalize to lowercase
     value = value.lower()
-    
+
     if len(value) > 255:
         raise ValueError(f"Email must be <= 255 characters")
-    
+
     # HIGH FIX: Validate format with regex
     email_pattern = r'^[a-z0-9]([a-z0-9._-]*[a-z0-9])?@[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$'
     if not re.match(email_pattern, value):
         raise ValueError(f"Invalid email format: {value}")
-    
+
     return value
 ```
 
@@ -241,19 +241,19 @@ def validate_email(self, key, value):
 def validate_vin(self, key, value):
     if not value:
         raise ValueError("VIN cannot be empty")
-    
+
     # HIGH FIX: Enforce uppercase
     value = value.upper()
-    
+
     # HIGH FIX: Validate 17 characters
     if len(value) != 17:
         raise ValueError(f"VIN must be exactly 17 characters")
-    
+
     # HIGH FIX: VIN regex - alphanumeric excluding I, O, Q
     vin_pattern = r'^[A-HJ-NPR-Z0-9]{17}$'
     if not re.match(vin_pattern, value):
         raise ValueError(f"Invalid VIN format: {value}")
-    
+
     return value
 ```
 

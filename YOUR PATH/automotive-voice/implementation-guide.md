@@ -113,7 +113,7 @@ class DeepgramSTTService:
         self.client = DeepgramClient(api_key)
         self.connection = None
         self.transcript_queue = asyncio.Queue()
-    
+
     async def connect(self):
         self.connection = self.client.listen.live({
             "model": "nova-2-phonecall",
@@ -126,10 +126,10 @@ class DeepgramSTTService:
             "endpointing": 300,
             "utterance_end_ms": 1000
         })
-        
+
         self.connection.on(LiveTranscriptionEvents.Transcript, self._on_transcript)
         await self.connection.start()
-    
+
     async def _on_transcript(self, result):
         transcript = result.channel.alternatives[0].transcript
         if transcript:
@@ -143,11 +143,11 @@ class DeepgramSTTService:
                     "type": "interim",
                     "text": transcript
                 })
-    
+
     async def send_audio(self, audio_chunk: bytes):
         if self.connection:
             self.connection.send(audio_chunk)
-    
+
     async def get_transcript(self):
         return await self.transcript_queue.get()
 ```
@@ -162,18 +162,18 @@ class DeepgramTTSService:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.ws_url = "wss://api.deepgram.com/v1/speak?encoding=mulaw&sample_rate=8000&container=none"
-    
+
     async def synthesize_stream(self, text: str):
         """Stream TTS audio back"""
         headers = {
             "Authorization": f"Token {self.api_key}"
         }
-        
+
         async with websockets.connect(self.ws_url, extra_headers=headers) as ws:
             # Send text chunks
             await ws.send(json.dumps({"type": "Speak", "text": text}))
             await ws.send(json.dumps({"type": "Flush"}))
-            
+
             # Receive audio chunks
             async for message in ws:
                 try:
@@ -195,39 +195,39 @@ router = APIRouter()
 @router.websocket("/media-stream")
 async def handle_media_stream(websocket: WebSocket):
     await websocket.accept()
-    
+
     # Initialize services
     stt = DeepgramSTTService(DEEPGRAM_API_KEY)
     tts = DeepgramTTSService(DEEPGRAM_API_KEY)
-    
+
     await stt.connect()
-    
+
     # Session state
     call_sid = None
     stream_sid = None
     conversation_history = []
     speaking = False
-    
+
     async def receive_from_twilio():
         """Handle incoming audio from Twilio"""
         async for message in websocket.iter_text():
             data = json.loads(message)
-            
+
             if data['event'] == 'start':
                 stream_sid = data['start']['streamSid']
                 call_sid = data['start']['callSid']
                 print(f"Call started: {call_sid}")
-            
+
             elif data['event'] == 'media':
                 # Send audio to Deepgram STT
                 audio = base64.b64decode(data['media']['payload'])
                 await stt.send_audio(audio)
-    
+
     async def process_transcripts():
         """Handle transcripts and generate responses"""
         while True:
             transcript_data = await stt.get_transcript()
-            
+
             if transcript_data['type'] == 'interim':
                 # Barge-in detection
                 if speaking:
@@ -237,14 +237,14 @@ async def handle_media_stream(websocket: WebSocket):
                         "streamSid": stream_sid
                     })
                     speaking = False
-            
+
             elif transcript_data['type'] == 'final':
                 user_message = transcript_data['text']
                 conversation_history.append({
                     "role": "user",
                     "content": user_message
                 })
-                
+
                 # GPT-4o reasoning
                 response = await openai.chat.completions.create(
                     model="gpt-4o",
@@ -252,7 +252,7 @@ async def handle_media_stream(websocket: WebSocket):
                     tools=get_tool_definitions(),
                     temperature=0.8
                 )
-                
+
                 # Handle tool calls
                 if response.choices[0].message.tool_calls:
                     for tool_call in response.choices[0].message.tool_calls:
@@ -263,19 +263,19 @@ async def handle_media_stream(websocket: WebSocket):
                             "name": tool_call.function.name,
                             "content": json.dumps(result)
                         })
-                    
+
                     # Get final response after tool execution
                     response = await openai.chat.completions.create(
                         model="gpt-4o",
                         messages=conversation_history
                     )
-                
+
                 assistant_message = response.choices[0].message.content
                 conversation_history.append({
                     "role": "assistant",
                     "content": assistant_message
                 })
-                
+
                 # Synthesize speech
                 speaking = True
                 async for audio_chunk in tts.synthesize_stream(assistant_message):
@@ -287,7 +287,7 @@ async def handle_media_stream(websocket: WebSocket):
                         }
                     })
                 speaking = False
-    
+
     # Run both tasks concurrently
     await asyncio.gather(
         receive_from_twilio(),
@@ -308,11 +308,11 @@ async def lookup_customer(phone: str):
     cached = await redis.get(f"customer:{phone}")
     if cached:
         return json.loads(cached)
-    
+
     # Query database
     customer = await db.fetch_one(
         """
-        SELECT c.*, 
+        SELECT c.*,
                json_agg(v.*) as vehicles
         FROM customers c
         LEFT JOIN vehicles v ON v.customer_id = c.id
@@ -321,7 +321,7 @@ async def lookup_customer(phone: str):
         """,
         {"phone": phone}
     )
-    
+
     if customer:
         # Cache for 5 minutes
         await redis.setex(
@@ -329,7 +329,7 @@ async def lookup_customer(phone: str):
             300,
             json.dumps(customer)
         )
-    
+
     return customer
 ```
 
@@ -346,28 +346,28 @@ async def get_available_slots(date: str):
     Returns slots between 9 AM - 5 PM, excluding lunch (12-1 PM)
     """
     service = get_calendar_service()
-    
+
     # Parse date
     start_time = datetime.fromisoformat(f"{date}T09:00:00")
     end_time = datetime.fromisoformat(f"{date}T17:00:00")
-    
+
     # Query freebusy
     body = {
         "timeMin": start_time.isoformat() + "Z",
         "timeMax": end_time.isoformat() + "Z",
         "items": [{"id": "primary"}]
     }
-    
+
     result = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.freebusy().query(body=body).execute()
     )
-    
+
     busy_periods = result['calendars']['primary']['busy']
-    
+
     # Calculate free slots
     free_slots = calculate_free_slots(busy_periods, start_time, end_time)
-    
+
     return free_slots
 
 
@@ -383,7 +383,7 @@ async def book_appointment(
     """
     # Create calendar event
     service = get_calendar_service()
-    
+
     event = {
         "summary": f"{service_type} - {customer_name}",
         "description": f"Vehicle: {vehicle_info}\nPhone: {phone}",
@@ -396,16 +396,16 @@ async def book_appointment(
             "timeZone": "America/New_York"
         }
     }
-    
+
     calendar_event = await asyncio.get_event_loop().run_in_executor(
         None,
         lambda: service.events().insert(calendarId='primary', body=event).execute()
     )
-    
+
     # Save to database
     appointment = await db.execute(
         """
-        INSERT INTO appointments 
+        INSERT INTO appointments
         (id, customer_id, vehicle_id, service_type, scheduled_at, calendar_event_id, status)
         VALUES (:id, :customer_id, :vehicle_id, :service_type, :scheduled_at, :calendar_event_id, 'scheduled')
         """,
@@ -418,7 +418,7 @@ async def book_appointment(
             "calendar_event_id": calendar_event["id"]
         }
     )
-    
+
     return {
         "success": True,
         "appointment_id": appointment["id"],
@@ -439,7 +439,7 @@ async def send_appointment_reminders():
     """
     # Find appointments for tomorrow
     tomorrow = (datetime.now() + timedelta(days=1)).date()
-    
+
     appointments = await db.fetch_all(
         """
         SELECT a.*, c.phone, c.name, v.make, v.model
@@ -451,22 +451,22 @@ async def send_appointment_reminders():
         """,
         {"tomorrow": tomorrow}
     )
-    
+
     twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-    
+
     for appt in appointments:
         # POC SAFETY: Only call YOUR_TEST_NUMBER
         if appt['phone'] != YOUR_TEST_NUMBER:
             print(f"Skipping call to {appt['phone']} (POC safety)")
             continue
-        
+
         # Make outbound call
         call = twilio_client.calls.create(
             to=appt['phone'],
             from_=TWILIO_PHONE_NUMBER,
             url=f"{BASE_URL}/outbound-reminder?appointment_id={appt['id']}"
         )
-        
+
         print(f"Reminder call initiated: {call.sid}")
         await asyncio.sleep(2)  # Rate limiting
 ```

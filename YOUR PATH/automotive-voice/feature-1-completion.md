@@ -226,7 +226,7 @@ python scripts/generate_mock_crm_data.py
 ### Model Validation
 ✓ All models import successfully without errors
 ✓ Customer model: 23 columns
-✓ Vehicle model: 20 columns  
+✓ Vehicle model: 20 columns
 ✓ Appointment model: 25 columns
 ✓ ServiceHistory model: 13 columns
 ✓ CallLog model: 22 columns (unchanged)
@@ -247,7 +247,7 @@ python scripts/generate_mock_crm_data.py
 ### Issue 1: Dependency Version Conflicts
 **Problem:** `deepgram-sdk==3.8.3` and `pyvin==1.0.1` versions didn't exist in PyPI
 
-**Resolution:** 
+**Resolution:**
 - Updated `deepgram-sdk` to 3.8.0 (latest stable in 3.8.x series)
 - Updated `pyvin` to 0.0.2 (latest available version)
 - Both packages maintain API compatibility
@@ -353,7 +353,7 @@ python scripts/generate_mock_crm_data.py
 # Verify data
 # Connect to PostgreSQL and run:
 # SELECT COUNT(*) FROM customers;
-# SELECT COUNT(*) FROM vehicles; 
+# SELECT COUNT(*) FROM vehicles;
 # SELECT COUNT(*) FROM appointments;
 # SELECT COUNT(*) FROM service_history;
 ```

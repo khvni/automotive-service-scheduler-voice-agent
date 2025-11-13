@@ -40,7 +40,7 @@ async def handle_incoming_call(
     # Optional: Greet caller before connecting
     # Uncomment to add initial greeting
     # response.say(
-    #     "Thank you for calling Bart's Automotive. "
+    #     "Thank you for calling Otto's Auto. "
     #     "Please wait while we connect you to our AI assistant.",
     #     voice="Polly.Joanna"
     # )
