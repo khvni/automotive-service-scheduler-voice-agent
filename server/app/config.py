@@ -85,5 +85,13 @@ class Settings(BaseSettings):
     SERVICE_CENTER_HOURS: str = "Monday-Friday 8AM-6PM, Saturday 9AM-4PM"
     DEFAULT_APPOINTMENT_DURATION: int = 60  # minutes
 
+    # Worker Configuration
+    REMINDER_CRON_SCHEDULE: str = "0 9 * * *"  # Daily at 9 AM
+    REMINDER_DAYS_BEFORE: int = 1  # Remind 1 day before appointment
+    SERVER_API_URL: str = "http://localhost:8000/api/v1"
+
+    # POC Safety Feature: Only call this number during testing
+    YOUR_TEST_NUMBER: str = "+1234567890"  # Set to your real number for testing
+
 
 settings = Settings()

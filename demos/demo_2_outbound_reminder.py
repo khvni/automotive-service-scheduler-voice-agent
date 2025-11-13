@@ -218,8 +218,8 @@ async def find_appointments_for_reminders(db):
     return appointments
 
 
-async def demonstrate_twilio_api():
-    """Demonstrate Twilio API setup (without making actual call in demo)."""
+async def demonstrate_twilio_api(appointment: Appointment, make_real_call: bool = False):
+    """Demonstrate Twilio API integration and optionally make a real call."""
 
     print_step(3, "Demonstrating Twilio API Integration")
 
@@ -233,20 +233,85 @@ async def demonstrate_twilio_api():
         print_info(f"From Number: {settings.TWILIO_PHONE_NUMBER}")
         print_info(f"Webhook URL: {settings.BASE_URL}")
 
-        # Show what the API call would look like
-        print(f"\n{Colors.BOLD}Outbound call would be initiated with:{Colors.ENDC}")
-        print(f"  client.calls.create(")
-        print(f"      to='+15559876543',")
-        print(f"      from_='{settings.TWILIO_PHONE_NUMBER}',")
-        print(
-            f"      url='{settings.BASE_URL}/api/v1/webhooks/outbound-reminder?appointment_id=1'"
-        )
-        print(f"  )\n")
+        # Check if YOUR_TEST_NUMBER is configured
+        test_number = settings.YOUR_TEST_NUMBER if hasattr(settings, 'YOUR_TEST_NUMBER') else None
 
-        print_warning("Actual call NOT made in demo mode (to avoid charges/spam)")
+        if not test_number or test_number == "+1234567890":
+            print_warning("YOUR_TEST_NUMBER not configured in .env - cannot make test call")
+            print_info("Set YOUR_TEST_NUMBER in .env to your actual phone number to test outbound calls")
+            make_real_call = False
+
+        # Show what the API call would look like
+        print(f"\n{Colors.BOLD}Outbound call configuration:{Colors.ENDC}")
+        print(f"  To: {test_number or 'Not configured'}")
+        print(f"  From: {settings.TWILIO_PHONE_NUMBER}")
+        print(f"  Webhook: {settings.BASE_URL}/api/v1/webhooks/outbound-reminder?appointment_id={appointment.id}\n")
+
+        if make_real_call and test_number:
+            # Ask for confirmation before making actual call
+            print(f"\n{Colors.WARNING}{Colors.BOLD}⚠️  REAL PHONE CALL{Colors.ENDC}")
+            print(f"This will initiate an actual phone call to: {Colors.BOLD}{test_number}{Colors.ENDC}")
+            print(f"Cost: ~$0.01-0.02 per minute")
+            print(f"Make sure your server is running at: {settings.BASE_URL}")
+
+            confirm = input(f"\n{Colors.WARNING}Type 'YES' to make the call, or anything else to skip: {Colors.ENDC}")
+
+            if confirm.strip().upper() == "YES":
+                print_info("\nInitiating outbound call...")
+
+                try:
+                    call = client.calls.create(
+                        to=test_number,
+                        from_=settings.TWILIO_PHONE_NUMBER,
+                        url=f"{settings.BASE_URL}/api/v1/webhooks/outbound-reminder?appointment_id={appointment.id}",
+                        method="POST",
+                        status_callback=f"{settings.BASE_URL}/api/v1/webhooks/call-status",
+                        status_callback_event=["initiated", "ringing", "answered", "completed"]
+                    )
+
+                    print_success(f"✓ Call initiated successfully!")
+                    print_info(f"Call SID: {call.sid}")
+                    print_info(f"Status: {call.status}")
+                    print_info(f"To: {call.to}")
+                    print_info(f"From: {call.from_}")
+
+                    print(f"\n{Colors.OKGREEN}{Colors.BOLD}📞 Your phone should ring shortly!{Colors.ENDC}")
+                    print(f"{Colors.OKBLUE}When you answer:{Colors.ENDC}")
+                    print(f"  1. AI will remind you about the appointment")
+                    print(f"  2. You can confirm or request to reschedule")
+                    print(f"  3. AI will execute appropriate tools")
+                    print(f"  4. Call will be logged to database\n")
+
+                    print_info("Waiting 30 seconds to allow call to complete...")
+                    await asyncio.sleep(30)
+
+                    # Fetch updated call status
+                    call = client.calls(call.sid).fetch()
+                    print_info(f"Final call status: {call.status}")
+                    print_info(f"Duration: {call.duration} seconds" if call.duration else "Duration: Not yet available")
+
+                    return call
+
+                except Exception as e:
+                    print(f"{Colors.FAIL}✗ Call failed: {e}{Colors.ENDC}")
+                    print_info("This might happen if:")
+                    print_info("  - Server is not running")
+                    print_info("  - Ngrok URL is not accessible")
+                    print_info("  - Twilio credentials are invalid")
+                    return None
+            else:
+                print_warning("Call cancelled by user")
+        else:
+            print_warning("Actual call NOT made (demo mode or YOUR_TEST_NUMBER not set)")
+            print_info("To test with real call:")
+            print_info("  1. Set YOUR_TEST_NUMBER in .env to your phone number")
+            print_info("  2. Start server: cd server && uvicorn app.main:app --reload")
+            print_info("  3. Start ngrok: ngrok http 8000")
+            print_info("  4. Update BASE_URL in .env with ngrok URL")
+            print_info("  5. Run this demo again with --make-call flag")
 
     except Exception as e:
-        print_warning(f"Twilio API demo skipped: {e}")
+        print_warning(f"Twilio API error: {e}")
         print_info("This is OK for demo purposes - call initiation logic is proven")
 
 
@@ -430,6 +495,9 @@ async def show_worker_cron_config():
 async def main():
     """Run the complete outbound reminder demo."""
 
+    # Check for --make-call flag
+    make_real_call = "--make-call" in sys.argv
+
     print_header("DEMO 2: OUTBOUND REMINDER CALL - APPOINTMENT CONFIRMATION")
 
     print(f"{Colors.BOLD}Purpose:{Colors.ENDC}")
@@ -439,10 +507,17 @@ async def main():
     print(f"{Colors.BOLD}What we'll demonstrate:{Colors.ENDC}")
     print("  ✓ Worker job finding appointments needing reminders")
     print("  ✓ Twilio outbound call API integration")
+    if make_real_call:
+        print(f"  {Colors.OKGREEN}✓ REAL OUTBOUND CALL to YOUR_TEST_NUMBER{Colors.ENDC}")
     print("  ✓ Outbound conversation flow (2 scenarios)")
     print("  ✓ Appointment rescheduling via tool")
     print("  ✓ Call logging to database")
     print("  ✓ Background worker configuration\n")
+
+    if make_real_call:
+        print(f"{Colors.WARNING}{Colors.BOLD}⚠️  REAL CALL MODE ENABLED{Colors.ENDC}")
+        print(f"  This will make an actual phone call to YOUR_TEST_NUMBER")
+        print(f"  Make sure your server is running with ngrok!\n")
 
     input(f"{Colors.WARNING}Press ENTER to begin demo...{Colors.ENDC}")
 
@@ -459,11 +534,16 @@ async def main():
             # Find appointments for reminders
             appointments = await find_appointments_for_reminders(db)
 
-            # Demonstrate Twilio API
-            await demonstrate_twilio_api()
+            # Demonstrate Twilio API (optionally make real call)
+            call_result = await demonstrate_twilio_api(appointment, make_real_call=make_real_call)
 
-            # Simulate conversations
-            await simulate_outbound_conversation(db, customer, appointment)
+            # Simulate conversations (skip if real call was made)
+            if not call_result:
+                await simulate_outbound_conversation(db, customer, appointment)
+            else:
+                print_header("REAL CALL COMPLETED")
+                print_success("The outbound reminder call was successfully initiated!")
+                print_info("Check your phone logs and database for call record")
 
             # Show call logging
             await verify_call_logging(db, customer)
