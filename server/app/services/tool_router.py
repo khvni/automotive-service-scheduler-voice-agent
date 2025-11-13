@@ -6,8 +6,7 @@ and formats results for the LLM to consume.
 """
 
 import logging
-from typing import Dict, Any, Callable, Optional
-from datetime import datetime, timedelta
+from typing import Dict, Any, Callable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -60,33 +59,40 @@ class ToolRouter:
 
         Returns:
             Dict with result or error:
-                {"success": True, "data": {...}}
-                {"success": False, "error": "..."}
+                {
+                    "success": True/False,
+                    "data": {...},
+                    "message": "Human-readable message",
+                    "error": "Error details if failed"
+                }
         """
         try:
             handler = self.tools.get(function_name)
             if not handler:
+                logger.warning(f"Unknown function requested: {function_name}")
                 return {
                     "success": False,
-                    "error": f"Unknown function: {function_name}"
+                    "error": f"Unknown function: {function_name}",
+                    "message": f"Function '{function_name}' is not available"
                 }
 
-            logger.info(f"Executing tool: {function_name}")
+            logger.info(f"Executing tool: {function_name} with args: {list(kwargs.keys())}")
             result = await handler(**kwargs)
 
-            return {
-                "success": True,
-                "data": result
-            }
+            # Tool functions return their own success/error structure
+            return result
 
         except Exception as e:
             logger.error(f"Error executing {function_name}: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "message": f"Unexpected error executing {function_name}"
             }
 
-    # Tool implementations
+    # ========================================================================
+    # Tool Implementations
+    # ========================================================================
 
     async def _lookup_customer(self, phone_number: str) -> Dict[str, Any]:
         """
@@ -106,73 +112,67 @@ class ToolRouter:
 
             if not customer:
                 return {
-                    "found": False,
+                    "success": True,
+                    "data": {"found": False},
                     "message": "No customer found with that phone number"
                 }
 
             return {
-                "found": True,
-                "customer": customer
+                "success": True,
+                "data": {"found": True, "customer": customer},
+                "message": f"Customer found: {customer.get('first_name')} {customer.get('last_name')}"
             }
 
         except Exception as e:
-            logger.error(f"Error looking up customer: {e}")
+            logger.error(f"Error looking up customer: {e}", exc_info=True)
             return {
-                "found": False,
-                "error": str(e)
+                "success": False,
+                "error": str(e),
+                "message": "Error looking up customer"
             }
 
     async def _get_available_slots(
         self,
         date: str,
-        service_type: str = "general_service"
+        duration_minutes: int = 30
     ) -> Dict[str, Any]:
         """
         Get available appointment slots for a date.
 
         Args:
             date: Date string (YYYY-MM-DD)
-            service_type: Type of service (optional)
+            duration_minutes: Slot duration in minutes (default: 30)
 
         Returns:
             Dict with available time slots
         """
         try:
             # Import here to avoid circular dependencies
-            from app.tools.calendar_tools import get_freebusy
+            from app.tools.crm_tools import get_available_slots
 
-            # Parse date
-            start_date = datetime.fromisoformat(date)
-            end_date = start_date + timedelta(days=1)
+            result = await get_available_slots(date, duration_minutes)
 
-            # Get free/busy info
-            slots = await get_freebusy(start_date, end_date)
+            # get_available_slots returns its own success/error structure
+            return result
 
-            return {
-                "date": date,
-                "service_type": service_type,
-                "available_slots": slots,
-                "message": f"Found {len(slots)} available time slots"
-            }
-
-        except ValueError as e:
-            logger.error(f"Invalid date format: {e}")
-            return {
-                "error": f"Invalid date format. Please use YYYY-MM-DD (e.g., 2025-01-15)"
-            }
         except Exception as e:
-            logger.error(f"Error getting available slots: {e}")
+            logger.error(f"Error getting available slots: {e}", exc_info=True)
             return {
-                "error": str(e)
+                "success": False,
+                "error": str(e),
+                "message": "Error retrieving available slots"
             }
 
     async def _book_appointment(
         self,
         customer_id: int,
         vehicle_id: int,
+        scheduled_at: str,
         service_type: str,
-        start_time: str,
-        notes: str = ""
+        duration_minutes: int = 60,
+        service_description: str = None,
+        customer_concerns: str = None,
+        notes: str = None
     ) -> Dict[str, Any]:
         """
         Book a service appointment.
@@ -180,8 +180,11 @@ class ToolRouter:
         Args:
             customer_id: Customer ID
             vehicle_id: Vehicle ID
+            scheduled_at: ISO format datetime string
             service_type: Type of service
-            start_time: ISO format datetime string
+            duration_minutes: Duration in minutes (default: 60)
+            service_description: Optional service description
+            customer_concerns: Optional customer concerns
             notes: Optional notes
 
         Returns:
@@ -189,69 +192,29 @@ class ToolRouter:
         """
         try:
             # Import here to avoid circular dependencies
-            from app.tools.calendar_tools import book_slot
-            from app.models.customer import Customer, Vehicle
+            from app.tools.crm_tools import book_appointment
 
-            # Parse start time
-            start_datetime = datetime.fromisoformat(start_time)
-
-            # Get customer and vehicle info for event details
-            customer = await self.db.get(Customer, customer_id)
-            vehicle = await self.db.get(Vehicle, vehicle_id)
-
-            if not customer or not vehicle:
-                return {
-                    "success": False,
-                    "error": "Customer or vehicle not found"
-                }
-
-            # Determine duration based on service type
-            duration_map = {
-                "oil_change": 30,
-                "tire_rotation": 30,
-                "inspection": 45,
-                "brake_service": 60,
-                "general_service": 60,
-            }
-            duration_minutes = duration_map.get(service_type, 60)
-
-            # Book slot in Google Calendar
-            customer_name = f"{customer.first_name} {customer.last_name}"
-            vehicle_desc = f"{vehicle.year} {vehicle.make} {vehicle.model}"
-
-            event = await book_slot(
-                start_time=start_datetime,
-                duration_minutes=duration_minutes,
-                customer_name=customer_name,
+            result = await book_appointment(
+                db=self.db,
+                customer_id=customer_id,
+                vehicle_id=vehicle_id,
+                scheduled_at=scheduled_at,
                 service_type=service_type,
+                duration_minutes=duration_minutes,
+                service_description=service_description,
+                customer_concerns=customer_concerns,
+                notes=notes,
             )
 
-            # TODO: Create appointment record in database (Feature 6)
-            # For now, just return the calendar event info
+            # book_appointment returns its own success/error structure
+            return result
 
-            return {
-                "booked": True,
-                "appointment_id": event.get("event_id"),
-                "customer_name": customer_name,
-                "vehicle": vehicle_desc,
-                "service_type": service_type,
-                "start_time": start_time,
-                "duration_minutes": duration_minutes,
-                "notes": notes,
-                "message": f"Appointment booked successfully for {customer_name}"
-            }
-
-        except ValueError as e:
-            logger.error(f"Invalid datetime format: {e}")
-            return {
-                "success": False,
-                "error": "Invalid datetime format. Please use ISO format (e.g., 2025-01-15T09:00:00)"
-            }
         except Exception as e:
-            logger.error(f"Error booking appointment: {e}")
+            logger.error(f"Error booking appointment: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "message": "Error booking appointment"
             }
 
     async def _get_upcoming_appointments(
@@ -268,101 +231,84 @@ class ToolRouter:
             Dict with list of upcoming appointments
         """
         try:
-            # TODO: Implement database query for appointments
-            # For now, return empty list as appointments table isn't in schema yet
-            logger.info(f"Getting upcoming appointments for customer {customer_id}")
+            # Import here to avoid circular dependencies
+            from app.tools.crm_tools import get_upcoming_appointments
 
-            return {
-                "customer_id": customer_id,
-                "appointments": [],
-                "message": "No upcoming appointments found"
-            }
+            result = await get_upcoming_appointments(self.db, customer_id)
+
+            # get_upcoming_appointments returns its own success/error structure
+            return result
 
         except Exception as e:
-            logger.error(f"Error getting appointments: {e}")
+            logger.error(f"Error getting appointments: {e}", exc_info=True)
             return {
-                "error": str(e)
+                "success": False,
+                "error": str(e),
+                "message": "Error retrieving appointments"
             }
 
     async def _cancel_appointment(
         self,
         appointment_id: int,
-        reason: Optional[str] = None
+        reason: str = "Not specified"
     ) -> Dict[str, Any]:
         """
         Cancel an appointment.
 
         Args:
             appointment_id: Appointment ID to cancel
-            reason: Optional cancellation reason
+            reason: Cancellation reason (default: "Not specified")
 
         Returns:
             Dict with cancellation result
         """
         try:
-            # TODO: Implement appointment cancellation
-            # This will need to:
-            # 1. Update appointment status in database
-            # 2. Delete event from Google Calendar
-            logger.info(f"Cancelling appointment {appointment_id}, reason: {reason}")
+            # Import here to avoid circular dependencies
+            from app.tools.crm_tools import cancel_appointment
 
-            return {
-                "cancelled": True,
-                "appointment_id": appointment_id,
-                "reason": reason or "Not specified",
-                "message": "Appointment cancelled successfully"
-            }
+            result = await cancel_appointment(self.db, appointment_id, reason)
+
+            # cancel_appointment returns its own success/error structure
+            return result
 
         except Exception as e:
-            logger.error(f"Error cancelling appointment: {e}")
+            logger.error(f"Error cancelling appointment: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "message": "Error cancelling appointment"
             }
 
     async def _reschedule_appointment(
         self,
         appointment_id: int,
-        new_start_time: str
+        new_datetime: str
     ) -> Dict[str, Any]:
         """
         Reschedule an appointment to a new time.
 
         Args:
             appointment_id: Appointment ID to reschedule
-            new_start_time: New start time (ISO format)
+            new_datetime: New datetime (ISO format)
 
         Returns:
             Dict with reschedule result
         """
         try:
-            # Parse new time
-            new_datetime = datetime.fromisoformat(new_start_time)
+            # Import here to avoid circular dependencies
+            from app.tools.crm_tools import reschedule_appointment
 
-            # TODO: Implement appointment rescheduling
-            # This will need to:
-            # 1. Update appointment time in database
-            # 2. Update event in Google Calendar
-            logger.info(f"Rescheduling appointment {appointment_id} to {new_start_time}")
+            result = await reschedule_appointment(self.db, appointment_id, new_datetime)
 
-            return {
-                "rescheduled": True,
-                "appointment_id": appointment_id,
-                "new_start_time": new_start_time,
-                "message": "Appointment rescheduled successfully"
-            }
+            # reschedule_appointment returns its own success/error structure
+            return result
 
-        except ValueError as e:
-            logger.error(f"Invalid datetime format: {e}")
-            return {
-                "success": False,
-                "error": "Invalid datetime format. Please use ISO format (e.g., 2025-01-16T14:00:00)"
-            }
         except Exception as e:
-            logger.error(f"Error rescheduling appointment: {e}")
+            logger.error(f"Error rescheduling appointment: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "message": "Error rescheduling appointment"
             }
 
     async def _decode_vin(self, vin: str) -> Dict[str, Any]:
@@ -377,33 +323,17 @@ class ToolRouter:
         """
         try:
             # Import here to avoid circular dependencies
-            from app.tools.vin_tools import decode_vin
+            from app.tools.crm_tools import decode_vin
 
-            # Validate VIN length
-            if len(vin) != 17:
-                return {
-                    "valid": False,
-                    "error": "VIN must be exactly 17 characters"
-                }
+            result = await decode_vin(vin)
 
-            vehicle_info = await decode_vin(vin)
-
-            if not vehicle_info or vehicle_info.get("error"):
-                return {
-                    "valid": False,
-                    "message": "Invalid VIN or unable to decode",
-                    "error": vehicle_info.get("error") if vehicle_info else "Unknown error"
-                }
-
-            return {
-                "valid": True,
-                "vehicle": vehicle_info,
-                "message": f"VIN decoded successfully: {vehicle_info.get('make')} {vehicle_info.get('model')}"
-            }
+            # decode_vin returns its own success/error structure
+            return result
 
         except Exception as e:
-            logger.error(f"Error decoding VIN: {e}")
+            logger.error(f"Error decoding VIN: {e}", exc_info=True)
             return {
-                "valid": False,
-                "error": str(e)
+                "success": False,
+                "error": str(e),
+                "message": "Error decoding VIN"
             }
