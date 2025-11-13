@@ -311,7 +311,12 @@ async def handle_media_stream(websocket: WebSocket):
                         # Decode audio and send to STT
                         audio_payload = data["media"]["payload"]
                         audio_bytes = base64.b64decode(audio_payload)
-                        await stt.send_audio(audio_bytes)
+
+                        # Validate audio before sending (prevent Deepgram disconnections from empty packets)
+                        if audio_bytes and len(audio_bytes) > 0:
+                            await stt.send_audio(audio_bytes)
+                        else:
+                            logger.debug("Skipped empty audio packet")
 
                     elif event == "mark":
                         # Mark acknowledgment (used for synchronization in reference)
@@ -325,7 +330,15 @@ async def handle_media_stream(websocket: WebSocket):
             except WebSocketDisconnect:
                 logger.info("Twilio disconnected (receive task)")
             except Exception as e:
-                logger.error(f"Error in receive_from_twilio: {e}", exc_info=True)
+                logger.error(
+                    f"Error in receive_from_twilio: {e}",
+                    exc_info=True,
+                    extra={
+                        "call_sid": call_sid,
+                        "stream_sid": stream_sid,
+                        "error_type": type(e).__name__,
+                    },
+                )
 
         async def process_transcripts():
             """
@@ -500,7 +513,15 @@ async def handle_media_stream(websocket: WebSocket):
                                 logger.warning(f"Failed to update session in Redis: {e}")
 
             except Exception as e:
-                logger.error(f"Error in process_transcripts: {e}", exc_info=True)
+                logger.error(
+                    f"Error in process_transcripts: {e}",
+                    exc_info=True,
+                    extra={
+                        "call_sid": call_sid,
+                        "stream_sid": stream_sid,
+                        "error_type": type(e).__name__,
+                    },
+                )
 
         # Run both tasks concurrently using asyncio.gather
         logger.info("Starting concurrent tasks (receive + process)")
@@ -510,7 +531,28 @@ async def handle_media_stream(websocket: WebSocket):
         logger.info("WebSocket disconnected by client")
 
     except Exception as e:
-        logger.error(f"Error in media stream handler: {e}", exc_info=True)
+        logger.error(
+            f"Error in media stream handler: {e}",
+            exc_info=True,
+            extra={
+                "call_sid": call_sid,
+                "stream_sid": stream_sid,
+                "caller_phone": caller_phone,
+                "error_type": type(e).__name__,
+            },
+        )
+
+        # Attempt to send graceful error message to caller
+        try:
+            if websocket and stream_sid:
+                # Clear any pending audio
+                await websocket.send_json({"event": "clear", "streamSid": stream_sid})
+
+                # Note: We cannot easily send TTS audio here since services may be broken
+                # In production, consider having a pre-recorded error message
+                logger.info("Sent clear event to Twilio due to error")
+        except Exception as fallback_error:
+            logger.error(f"Failed to send error notification to caller: {fallback_error}")
 
     finally:
         # Cleanup: Close all services and save final state

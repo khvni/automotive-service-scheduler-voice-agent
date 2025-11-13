@@ -69,9 +69,43 @@ class DeepgramTTSService(TTSInterface):
         """Check if currently connected to Deepgram TTS."""
         return self._is_connected and self.ws is not None
 
-    async def connect(self) -> None:
+    async def connect(self, max_retries: int = 3, backoff_factor: float = 1.5) -> None:
         """
-        Connect to Deepgram TTS WebSocket API.
+        Connect to Deepgram TTS WebSocket API with retry logic.
+
+        Args:
+            max_retries: Maximum number of connection attempts (default: 3)
+            backoff_factor: Exponential backoff multiplier (default: 1.5)
+
+        Raises:
+            Exception: If connection fails after all retries
+        """
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                await self._attempt_connection()
+                logger.info(f"Connected to Deepgram TTS on attempt {attempt + 1}/{max_retries}")
+                return
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"TTS connection attempt {attempt + 1}/{max_retries} failed: {e}"
+                )
+
+                if attempt < max_retries - 1:
+                    delay = backoff_factor ** attempt
+                    logger.info(f"Retrying TTS connection in {delay:.1f}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"TTS connection failed after {max_retries} attempts")
+
+        # All retries exhausted
+        raise Exception(f"Failed to connect to Deepgram TTS after {max_retries} attempts: {last_error}")
+
+    async def _attempt_connection(self) -> None:
+        """
+        Single connection attempt to Deepgram TTS.
 
         Raises:
             Exception: If connection fails
@@ -97,8 +131,8 @@ class DeepgramTTSService(TTSInterface):
             # Start background task to receive audio
             self._receive_task = asyncio.create_task(self._receive_audio())
 
-            logger.info(
-                f"[TTS] Connected to Deepgram TTS WebSocket: model={self.model}, "
+            logger.debug(
+                f"[TTS] Deepgram TTS connection attempt successful: model={self.model}, "
                 f"encoding={self.encoding}, sample_rate={self.sample_rate}"
             )
 

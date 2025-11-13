@@ -61,9 +61,9 @@ class DeepgramSTTService:
 
         logger.info("DeepgramSTTService initialized with nova-2-phonecall model")
 
-    async def connect(self) -> None:
+    async def connect(self, max_retries: int = 3, backoff_factor: float = 1.5) -> None:
         """
-        Establish WebSocket connection to Deepgram.
+        Establish WebSocket connection to Deepgram with retry logic.
 
         Sets up event listeners for:
         - Open: Connection established
@@ -72,6 +72,40 @@ class DeepgramSTTService:
         - Close: Connection closed
         - Error: Error handling
         - Warning: Warning messages
+
+        Args:
+            max_retries: Maximum number of connection attempts (default: 3)
+            backoff_factor: Exponential backoff multiplier (default: 1.5)
+
+        Raises:
+            Exception: If connection fails after all retries
+        """
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                await self._attempt_connection()
+                logger.info(f"Connected to Deepgram STT on attempt {attempt + 1}/{max_retries}")
+                return
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"STT connection attempt {attempt + 1}/{max_retries} failed: {e}"
+                )
+
+                if attempt < max_retries - 1:
+                    delay = backoff_factor ** attempt
+                    logger.info(f"Retrying STT connection in {delay:.1f}s...")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"STT connection failed after {max_retries} attempts")
+
+        # All retries exhausted
+        raise Exception(f"Failed to connect to Deepgram STT after {max_retries} attempts: {last_error}")
+
+    async def _attempt_connection(self) -> None:
+        """
+        Single connection attempt to Deepgram.
 
         Raises:
             Exception: If connection fails
@@ -93,36 +127,26 @@ class DeepgramSTTService:
             self.connection.on(LiveTranscriptionEvents.Warning, self._on_warning)
             self.connection.on(LiveTranscriptionEvents.Metadata, self._on_metadata)
 
-            # CRITICAL FIX: Add try/except around connection.start() to prevent resource leaks
-            try:
-                # Start the connection (synchronous call)
-                if not self.connection.start(self.live_options):
-                    raise Exception("Failed to start Deepgram connection")
+            # Start the connection (synchronous call)
+            if not self.connection.start(self.live_options):
+                raise Exception("Failed to start Deepgram connection")
 
-                self.is_connected = True
+            self.is_connected = True
 
-                # Start keepalive task
-                self.keepalive_task = asyncio.create_task(self._keepalive_loop())
+            # Start keepalive task
+            self.keepalive_task = asyncio.create_task(self._keepalive_loop())
 
-                logger.info("Connected to Deepgram STT")
-
-            except Exception as start_error:
-                # CRITICAL FIX: Clean up connection/client on failure to prevent resource leaks
-                logger.error(f"Failed to start Deepgram connection: {start_error}")
-                if self.connection:
-                    try:
-                        self.connection.finish()
-                    except:
-                        pass
-                    self.connection = None
-                self.client = None
-                self.is_connected = False
-                raise
+            logger.debug("Deepgram STT connection attempt successful")
 
         except Exception as e:
-            logger.error(f"Failed to connect to Deepgram: {e}")
-            # CRITICAL FIX: Ensure cleanup on any failure
-            self.connection = None
+            # Clean up connection/client on failure to prevent resource leaks
+            logger.error(f"Failed to start Deepgram connection: {e}")
+            if self.connection:
+                try:
+                    self.connection.finish()
+                except:
+                    pass
+                self.connection = None
             self.client = None
             self.is_connected = False
             raise
