@@ -58,8 +58,10 @@ class Settings(BaseSettings):
 
     # OpenAI
     OPENAI_API_KEY: str = ""
-    OPENAI_MODEL: str = "gpt-4o-realtime-preview-2024-12-17"
-    OPENAI_VOICE: str = "alloy"
+    OPENAI_MODEL: str = "gpt-4o"  # Standard Chat Completions API (not Realtime)
+    OPENAI_TEMPERATURE: float = 0.8  # Sampling temperature for responses
+    OPENAI_MAX_TOKENS: int = 1000  # Maximum tokens per response
+    OPENAI_VOICE: str = "alloy"  # Voice for Realtime API (not used with standard API)
 
     # ElevenLabs (optional)
     ELEVENLABS_API_KEY: str = ""
