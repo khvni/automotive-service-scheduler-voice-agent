@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file="../.env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/automotive_scheduler"
+    DATABASE_URL: str = ""  # Must be set in .env file
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
