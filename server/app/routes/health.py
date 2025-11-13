@@ -1,11 +1,10 @@
 """Health check endpoints."""
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-
 from app.services.database import get_db
 from app.services.redis_client import get_redis
+from fastapi import APIRouter, Depends
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -40,10 +39,10 @@ async def redis_health_check():
         else:
             return JSONResponse(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "unhealthy", "redis": "disconnected"}
+                content={"status": "unhealthy", "redis": "disconnected"},
             )
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "unhealthy", "redis": "disconnected", "error": str(e)}
+            content={"status": "unhealthy", "redis": "disconnected", "error": str(e)},
         )

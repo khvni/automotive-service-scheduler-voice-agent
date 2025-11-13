@@ -165,10 +165,7 @@ async def set_session(call_sid: str, session_data: dict, ttl: int = 3600) -> boo
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            await asyncio.wait_for(
-                redis_client.setex(key, ttl, value),
-                timeout=REDIS_TIMEOUT
-            )
+            await asyncio.wait_for(redis_client.setex(key, ttl, value), timeout=REDIS_TIMEOUT)
             logger.info(f"Session stored: {call_sid} (TTL: {ttl}s)")
             return True
         except asyncio.TimeoutError:
@@ -197,10 +194,7 @@ async def get_session(call_sid: str) -> Optional[dict]:
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            value = await asyncio.wait_for(
-                redis_client.get(key),
-                timeout=REDIS_TIMEOUT
-            )
+            value = await asyncio.wait_for(redis_client.get(key), timeout=REDIS_TIMEOUT)
 
             if value:
                 logger.info(f"Session cache hit: {call_sid}")
@@ -249,9 +243,9 @@ async def update_session(call_sid: str, updates: dict) -> bool:
                     key,
                     key,  # ttl_key (not used but required for KEYS array)
                     json.dumps(updates),
-                    timestamp
+                    timestamp,
                 ),
-                timeout=REDIS_TIMEOUT
+                timeout=REDIS_TIMEOUT,
             )
 
             if result is None:
@@ -287,10 +281,7 @@ async def delete_session(call_sid: str) -> bool:
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            deleted = await asyncio.wait_for(
-                redis_client.delete(key),
-                timeout=REDIS_TIMEOUT
-            )
+            deleted = await asyncio.wait_for(redis_client.delete(key), timeout=REDIS_TIMEOUT)
 
             if deleted:
                 logger.info(f"Session deleted: {call_sid}")
@@ -351,10 +342,7 @@ async def cache_customer(phone: str, customer_data: dict, ttl: int = 300) -> boo
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            await asyncio.wait_for(
-                redis_client.setex(key, ttl, value),
-                timeout=REDIS_TIMEOUT
-            )
+            await asyncio.wait_for(redis_client.setex(key, ttl, value), timeout=REDIS_TIMEOUT)
             logger.info(f"Customer cached: {phone} (TTL: {ttl}s)")
             return True
         except asyncio.TimeoutError:
@@ -383,10 +371,7 @@ async def get_cached_customer(phone: str) -> Optional[dict]:
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            value = await asyncio.wait_for(
-                redis_client.get(key),
-                timeout=REDIS_TIMEOUT
-            )
+            value = await asyncio.wait_for(redis_client.get(key), timeout=REDIS_TIMEOUT)
 
             if value:
                 logger.info(f"Customer cache hit: {phone}")
@@ -421,10 +406,7 @@ async def invalidate_customer_cache(phone: str) -> bool:
 
         # HIGH FIX: Add timeout to Redis operation
         try:
-            deleted = await asyncio.wait_for(
-                redis_client.delete(key),
-                timeout=REDIS_TIMEOUT
-            )
+            deleted = await asyncio.wait_for(redis_client.delete(key), timeout=REDIS_TIMEOUT)
 
             if deleted:
                 logger.info(f"Customer cache invalidated: {phone}")
@@ -460,10 +442,7 @@ async def check_redis_health() -> bool:
 
         # HIGH FIX: Add timeout to Redis ping operation
         try:
-            await asyncio.wait_for(
-                redis_client.ping(),
-                timeout=REDIS_TIMEOUT
-            )
+            await asyncio.wait_for(redis_client.ping(), timeout=REDIS_TIMEOUT)
             logger.debug("Redis health check: OK")
             return True
         except asyncio.TimeoutError:

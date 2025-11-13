@@ -9,15 +9,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "server"))
 
 from datetime import datetime
-from app.services import redis_client
+
 from app.config import settings
+from app.services import redis_client
 
 
 async def test_session_management():
     """Test session CRUD operations."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Testing Session Management")
-    print("="*70)
+    print("=" * 70)
 
     test_call_sid = "test_call_12345"
 
@@ -32,13 +33,13 @@ async def test_session_management():
             {
                 "role": "assistant",
                 "content": "Hello! How can I help you today?",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
         ],
         "current_state": "greeting",
         "collected_data": {},
         "intent": None,
-        "speaking": False
+        "speaking": False,
     }
 
     success = await redis_client.set_session(test_call_sid, session_data, ttl=60)
@@ -66,17 +67,15 @@ async def test_session_management():
     updates = {
         "current_state": "collecting_info",
         "intent": "book_appointment",
-        "collected_data": {
-            "service_type": "oil_change"
-        },
+        "collected_data": {"service_type": "oil_change"},
         "conversation_history": [
             *retrieved.get("conversation_history", []),
             {
                 "role": "user",
                 "content": "I need an oil change",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        ]
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        ],
     }
 
     success = await redis_client.update_session(test_call_sid, updates)
@@ -111,9 +110,9 @@ async def test_session_management():
 
 async def test_customer_caching():
     """Test customer cache operations."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Testing Customer Caching")
-    print("="*70)
+    print("=" * 70)
 
     test_phone = "+15551234567"
 
@@ -126,22 +125,12 @@ async def test_customer_caching():
         "last_name": "Doe",
         "email": "john.doe@example.com",
         "vehicles": [
-            {
-                "id": 1,
-                "make": "Toyota",
-                "model": "Camry",
-                "year": 2020,
-                "vin": "1HGBH41JXMN109186"
-            }
+            {"id": 1, "make": "Toyota", "model": "Camry", "year": 2020, "vin": "1HGBH41JXMN109186"}
         ],
         "upcoming_appointments": [
-            {
-                "id": 5,
-                "service_type": "Oil Change",
-                "date": "2025-11-15T10:00:00"
-            }
+            {"id": 5, "service_type": "Oil Change", "date": "2025-11-15T10:00:00"}
         ],
-        "last_service_date": "2025-09-01T14:30:00"
+        "last_service_date": "2025-09-01T14:30:00",
     }
 
     success = await redis_client.cache_customer(test_phone, customer_data, ttl=30)
@@ -186,9 +175,9 @@ async def test_customer_caching():
 
 async def test_ttl_expiration():
     """Test TTL (Time-To-Live) expiration."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Testing TTL Expiration")
-    print("="*70)
+    print("=" * 70)
 
     test_call_sid = "test_ttl_session"
 
@@ -203,7 +192,7 @@ async def test_ttl_expiration():
         "current_state": "greeting",
         "collected_data": {},
         "intent": None,
-        "speaking": False
+        "speaking": False,
     }
 
     success = await redis_client.set_session(test_call_sid, session_data, ttl=3)
@@ -240,9 +229,9 @@ async def test_ttl_expiration():
 
 async def test_health_check():
     """Test Redis health check."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Testing Health Check")
-    print("="*70)
+    print("=" * 70)
 
     print("\n1. Running Redis health check...")
     is_healthy = await redis_client.check_redis_health()
@@ -258,9 +247,9 @@ async def test_health_check():
 
 async def main():
     """Run all tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("Redis Session Management Test Suite")
-    print("="*70)
+    print("=" * 70)
     print(f"Redis URL: {settings.REDIS_URL}")
 
     try:
@@ -278,9 +267,9 @@ async def main():
         results.append(("TTL Expiration", await test_ttl_expiration()))
 
         # Summary
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("Test Summary")
-        print("="*70)
+        print("=" * 70)
 
         passed = 0
         failed = 0
@@ -305,6 +294,7 @@ async def main():
     except Exception as e:
         print(f"\n✗ Error during tests: {e}")
         import traceback
+
         traceback.print_exc()
         exit_code = 1
 

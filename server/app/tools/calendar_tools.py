@@ -1,10 +1,11 @@
 """Calendar tools for appointment scheduling using Google Calendar API."""
 
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
+from app.config import settings
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from app.config import settings
 
 
 def get_calendar_service():
@@ -16,9 +17,7 @@ def get_calendar_service():
     return build("calendar", "v3", credentials=credentials)
 
 
-async def get_freebusy(
-    start_date: datetime, end_date: datetime
-) -> List[Dict[str, Any]]:
+async def get_freebusy(start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
     """
     Get free/busy information for the service calendar.
 
@@ -38,9 +37,7 @@ async def get_freebusy(
     }
 
     freebusy_result = service.freebusy().query(body=body).execute()
-    busy_times = freebusy_result["calendars"][settings.GOOGLE_CALENDAR_ID].get(
-        "busy", []
-    )
+    busy_times = freebusy_result["calendars"][settings.GOOGLE_CALENDAR_ID].get("busy", [])
 
     # Generate available slots (simplified logic)
     available_slots = []

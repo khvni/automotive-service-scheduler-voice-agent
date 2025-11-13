@@ -10,12 +10,12 @@ from pathlib import Path
 # Add server directory to path
 sys.path.append(str(Path(__file__).parent.parent / "server"))
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.tools.crm_tools import lookup_customer, get_customer_vehicles
+from app.tools.crm_tools import get_customer_vehicles, lookup_customer
 from app.tools.vin_tools import decode_vin, suggest_service_for_vehicle
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 async def test_crm_tools():
@@ -23,9 +23,7 @@ async def test_crm_tools():
     print("\n=== Testing CRM Tools ===\n")
 
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    async_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session_maker() as db:
         # Test lookup_customer

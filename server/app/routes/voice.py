@@ -10,20 +10,19 @@ import base64
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
-
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from fastapi.responses import Response
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Dict, Optional
 
 from app.config import settings
+from app.services.database import get_db
 from app.services.deepgram_stt import DeepgramSTTService
 from app.services.deepgram_tts import DeepgramTTSService
 from app.services.openai_service import OpenAIService
-from app.services.database import get_db
-from app.services.redis_client import set_session, update_session, get_session
+from app.services.redis_client import get_session, set_session, update_session
 from app.services.tool_definitions import TOOL_SCHEMAS
 from app.services.tool_router import ToolRouter
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -82,10 +81,12 @@ def create_tool_handler(router: ToolRouter, tool_name: str):
     Returns:
         Async function that executes the tool
     """
+
     async def handler(**kwargs) -> Dict[str, Any]:
         logger.info(f"Executing tool: {tool_name}")
         result = await router.execute(tool_name, **kwargs)
         return result
+
     return handler
 
 
@@ -106,6 +107,29 @@ async def handle_incoming_call():
     <Pause length="1"/>
     <Connect>
         <Stream url="{ws_url}" />
+    </Connect>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/incoming-reminder")
+async def handle_incoming_reminder():
+    """
+    Twilio webhook for outbound reminder calls.
+    Returns TwiML to establish WebSocket connection with reminder context.
+
+    This endpoint is called by the worker job when making outbound reminder calls.
+    The WebSocket handler will detect the reminder context and use appropriate prompts.
+    """
+    ws_url = f"wss://{settings.BASE_URL}/api/v1/voice/media-stream"
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="{ws_url}">
+            <Parameter name="call_type" value="outbound_reminder"/>
+        </Stream>
     </Connect>
 </Response>"""
 
@@ -171,10 +195,7 @@ async def handle_media_stream(websocket: WebSocket):
         stt = DeepgramSTTService(settings.DEEPGRAM_API_KEY)
         tts = DeepgramTTSService(settings.DEEPGRAM_API_KEY)
         openai = OpenAIService(
-            api_key=settings.OPENAI_API_KEY,
-            model="gpt-4o",
-            temperature=0.8,
-            max_tokens=1000
+            api_key=settings.OPENAI_API_KEY, model="gpt-4o", temperature=0.8, max_tokens=1000
         )
 
         # Connect to STT and TTS
@@ -197,7 +218,7 @@ async def handle_media_stream(websocket: WebSocket):
                 name=tool_name,
                 description=tool_schema["function"]["description"],
                 parameters=tool_schema["function"]["parameters"],
-                handler=create_tool_handler(tool_router, tool_name)
+                handler=create_tool_handler(tool_router, tool_name),
             )
 
         logger.info(f"Registered {len(TOOL_SCHEMAS)} tools")
@@ -221,33 +242,39 @@ async def handle_media_stream(websocket: WebSocket):
             try:
                 async for message in websocket.iter_text():
                     data = json.loads(message)
-                    event = data.get('event')
+                    event = data.get("event")
 
-                    if event == 'connected':
+                    if event == "connected":
                         logger.info("Twilio Media Stream connected")
 
-                    elif event == 'start':
-                        call_sid = data['start']['callSid']
-                        stream_sid = data['start']['streamSid']
+                    elif event == "start":
+                        call_sid = data["start"]["callSid"]
+                        stream_sid = data["start"]["streamSid"]
 
                         # Extract caller phone from customParameters or start data
-                        custom_params = data['start'].get('customParameters', {})
-                        caller_phone = custom_params.get('From') or data['start'].get('from')
+                        custom_params = data["start"].get("customParameters", {})
+                        caller_phone = custom_params.get("From") or data["start"].get("from")
 
-                        logger.info(f"Call started - SID: {call_sid}, Stream: {stream_sid}, From: {caller_phone}")
+                        logger.info(
+                            f"Call started - SID: {call_sid}, Stream: {stream_sid}, From: {caller_phone}"
+                        )
 
                         # Initialize session in Redis
-                        await set_session(call_sid, {
-                            "stream_sid": stream_sid,
-                            "caller_phone": caller_phone,
-                            "started_at": datetime.now(timezone.utc).isoformat(),
-                            "conversation_history": [],
-                        })
+                        await set_session(
+                            call_sid,
+                            {
+                                "stream_sid": stream_sid,
+                                "caller_phone": caller_phone,
+                                "started_at": datetime.now(timezone.utc).isoformat(),
+                                "conversation_history": [],
+                            },
+                        )
 
                         # Personalize system prompt if customer exists
                         if caller_phone:
                             try:
                                 from app.tools.crm_tools import lookup_customer
+
                                 customer = await lookup_customer(db, caller_phone)
 
                                 if customer:
@@ -256,31 +283,42 @@ async def handle_media_stream(websocket: WebSocket):
                                     personalized_prompt += f"- Name: {customer['first_name']} {customer['last_name']}\n"
                                     personalized_prompt += f"- Customer since: {customer.get('customer_since', 'Unknown')}\n"
 
-                                    if customer.get('last_service_date'):
-                                        personalized_prompt += f"- Last service: {customer['last_service_date']}\n"
+                                    if customer.get("last_service_date"):
+                                        personalized_prompt += (
+                                            f"- Last service: {customer['last_service_date']}\n"
+                                        )
 
-                                    if customer.get('vehicles'):
-                                        vehicles = [f"{v['year']} {v['make']} {v['model']}" for v in customer['vehicles']]
-                                        personalized_prompt += f"- Vehicles: {', '.join(vehicles)}\n"
+                                    if customer.get("vehicles"):
+                                        vehicles = [
+                                            f"{v['year']} {v['make']} {v['model']}"
+                                            for v in customer["vehicles"]
+                                        ]
+                                        personalized_prompt += (
+                                            f"- Vehicles: {', '.join(vehicles)}\n"
+                                        )
 
-                                    personalized_prompt += f"\nGreet them by name and provide personalized service!"
+                                    personalized_prompt += (
+                                        f"\nGreet them by name and provide personalized service!"
+                                    )
                                     openai.set_system_prompt(personalized_prompt)
-                                    logger.info(f"Personalized prompt for customer: {customer['first_name']}")
+                                    logger.info(
+                                        f"Personalized prompt for customer: {customer['first_name']}"
+                                    )
                             except Exception as e:
                                 logger.warning(f"Could not personalize prompt: {e}")
 
-                    elif event == 'media':
+                    elif event == "media":
                         # Decode audio and send to STT
-                        audio_payload = data['media']['payload']
+                        audio_payload = data["media"]["payload"]
                         audio_bytes = base64.b64decode(audio_payload)
                         await stt.send_audio(audio_bytes)
 
-                    elif event == 'mark':
+                    elif event == "mark":
                         # Mark acknowledgment (used for synchronization in reference)
-                        mark_name = data['mark'].get('name')
+                        mark_name = data["mark"].get("name")
                         logger.debug(f"Mark received: {mark_name}")
 
-                    elif event == 'stop':
+                    elif event == "stop":
                         logger.info("Twilio Media Stream stop event received")
                         break
 
@@ -317,22 +355,19 @@ async def handle_media_stream(websocket: WebSocket):
                         await asyncio.sleep(0.01)
                         continue
 
-                    transcript_type = transcript_data.get('type')
-                    transcript_text = transcript_data.get('text', '').strip()
+                    transcript_type = transcript_data.get("type")
+                    transcript_text = transcript_data.get("text", "").strip()
 
                     if not transcript_text:
                         continue
 
                     # Handle interim results (barge-in detection)
-                    if transcript_type == 'interim':
+                    if transcript_type == "interim":
                         if is_speaking:
                             logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking")
 
                             # Clear Twilio audio playback immediately
-                            await websocket.send_json({
-                                "event": "clear",
-                                "streamSid": stream_sid
-                            })
+                            await websocket.send_json({"event": "clear", "streamSid": stream_sid})
 
                             # Clear TTS audio queue
                             await tts.clear()
@@ -343,7 +378,7 @@ async def handle_media_stream(websocket: WebSocket):
                             logger.info("Audio cleared for barge-in")
 
                     # Handle final transcripts (complete utterances)
-                    elif transcript_type == 'final' and transcript_data.get('speech_final'):
+                    elif transcript_type == "final" and transcript_data.get("speech_final"):
                         user_message = transcript_text
                         logger.info(f"USER: {user_message}")
 
@@ -357,28 +392,28 @@ async def handle_media_stream(websocket: WebSocket):
                         logger.info("Generating OpenAI response...")
 
                         async for event in openai.generate_response(stream=True):
-                            if event['type'] == 'content_delta':
+                            if event["type"] == "content_delta":
                                 # Stream text chunk to TTS immediately
-                                chunk = event['text']
+                                chunk = event["text"]
                                 response_text += chunk
                                 await tts.send_text(chunk)
 
-                            elif event['type'] == 'tool_call':
+                            elif event["type"] == "tool_call":
                                 # Tool is being executed (logged by OpenAI service)
-                                tool_name = event['name']
+                                tool_name = event["name"]
                                 logger.info(f"Tool executing: {tool_name}")
 
-                            elif event['type'] == 'tool_result':
+                            elif event["type"] == "tool_result":
                                 # Tool execution completed
                                 logger.info(f"Tool completed: {event.get('call_id')}")
 
-                            elif event['type'] == 'error':
+                            elif event["type"] == "error":
                                 # Error in response generation
                                 logger.error(f"OpenAI error: {event['message']}")
                                 is_speaking = False
                                 break
 
-                            elif event['type'] == 'done':
+                            elif event["type"] == "done":
                                 # Response generation complete
                                 logger.info(f"ASSISTANT: {response_text}")
 
@@ -412,23 +447,28 @@ async def handle_media_stream(websocket: WebSocket):
                             consecutive_empty = 0
 
                             # Send audio to Twilio (base64 encode mulaw)
-                            await websocket.send_json({
-                                "event": "media",
-                                "streamSid": stream_sid,
-                                "media": {
-                                    "payload": base64.b64encode(audio_chunk).decode('utf-8')
+                            await websocket.send_json(
+                                {
+                                    "event": "media",
+                                    "streamSid": stream_sid,
+                                    "media": {
+                                        "payload": base64.b64encode(audio_chunk).decode("utf-8")
+                                    },
                                 }
-                            })
+                            )
 
                         logger.debug("Audio streaming to Twilio complete")
 
                         # Update session in Redis with conversation history
                         if call_sid:
                             try:
-                                await update_session(call_sid, {
-                                    "conversation_history": openai.get_conversation_history(),
-                                    "last_updated": datetime.now(timezone.utc).isoformat(),
-                                })
+                                await update_session(
+                                    call_sid,
+                                    {
+                                        "conversation_history": openai.get_conversation_history(),
+                                        "last_updated": datetime.now(timezone.utc).isoformat(),
+                                    },
+                                )
                             except Exception as e:
                                 logger.warning(f"Failed to update session in Redis: {e}")
 
@@ -437,10 +477,7 @@ async def handle_media_stream(websocket: WebSocket):
 
         # Run both tasks concurrently using asyncio.gather
         logger.info("Starting concurrent tasks (receive + process)")
-        await asyncio.gather(
-            receive_from_twilio(),
-            process_transcripts()
-        )
+        await asyncio.gather(receive_from_twilio(), process_transcripts())
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")
@@ -479,12 +516,15 @@ async def handle_media_stream(websocket: WebSocket):
         # Save final session state to Redis
         if call_sid and openai:
             try:
-                await update_session(call_sid, {
-                    "ended_at": datetime.now(timezone.utc).isoformat(),
-                    "conversation_history": openai.get_conversation_history(),
-                    "total_tokens": openai.get_token_usage(),
-                    "status": "completed"
-                })
+                await update_session(
+                    call_sid,
+                    {
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                        "conversation_history": openai.get_conversation_history(),
+                        "total_tokens": openai.get_token_usage(),
+                        "status": "completed",
+                    },
+                )
                 logger.info(f"Final session state saved for call: {call_sid}")
             except Exception as e:
                 logger.warning(f"Failed to save final session state: {e}")

@@ -6,7 +6,8 @@ and formats results for the LLM to consume.
 """
 
 import logging
-from typing import Dict, Any, Callable
+from typing import Any, Callable, Dict
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class ToolRouter:
                 return {
                     "success": False,
                     "error": f"Unknown function: {function_name}",
-                    "message": f"Function '{function_name}' is not available"
+                    "message": f"Function '{function_name}' is not available",
                 }
 
             logger.info(f"Executing tool: {function_name} with args: {list(kwargs.keys())}")
@@ -87,7 +88,7 @@ class ToolRouter:
             return {
                 "success": False,
                 "error": str(e),
-                "message": f"Unexpected error executing {function_name}"
+                "message": f"Unexpected error executing {function_name}",
             }
 
     # ========================================================================
@@ -114,28 +115,20 @@ class ToolRouter:
                 return {
                     "success": True,
                     "data": {"found": False},
-                    "message": "No customer found with that phone number"
+                    "message": "No customer found with that phone number",
                 }
 
             return {
                 "success": True,
                 "data": {"found": True, "customer": customer},
-                "message": f"Customer found: {customer.get('first_name')} {customer.get('last_name')}"
+                "message": f"Customer found: {customer.get('first_name')} {customer.get('last_name')}",
             }
 
         except Exception as e:
             logger.error(f"Error looking up customer: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error looking up customer"
-            }
+            return {"success": False, "error": str(e), "message": "Error looking up customer"}
 
-    async def _get_available_slots(
-        self,
-        date: str,
-        duration_minutes: int = 30
-    ) -> Dict[str, Any]:
+    async def _get_available_slots(self, date: str, duration_minutes: int = 30) -> Dict[str, Any]:
         """
         Get available appointment slots for a date.
 
@@ -160,7 +153,7 @@ class ToolRouter:
             return {
                 "success": False,
                 "error": str(e),
-                "message": "Error retrieving available slots"
+                "message": "Error retrieving available slots",
             }
 
     async def _book_appointment(
@@ -172,7 +165,7 @@ class ToolRouter:
         duration_minutes: int = 60,
         service_description: str = None,
         customer_concerns: str = None,
-        notes: str = None
+        notes: str = None,
     ) -> Dict[str, Any]:
         """
         Book a service appointment.
@@ -211,16 +204,9 @@ class ToolRouter:
 
         except Exception as e:
             logger.error(f"Error booking appointment: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error booking appointment"
-            }
+            return {"success": False, "error": str(e), "message": "Error booking appointment"}
 
-    async def _get_upcoming_appointments(
-        self,
-        customer_id: int
-    ) -> Dict[str, Any]:
+    async def _get_upcoming_appointments(self, customer_id: int) -> Dict[str, Any]:
         """
         Get upcoming appointments for a customer.
 
@@ -241,16 +227,10 @@ class ToolRouter:
 
         except Exception as e:
             logger.error(f"Error getting appointments: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error retrieving appointments"
-            }
+            return {"success": False, "error": str(e), "message": "Error retrieving appointments"}
 
     async def _cancel_appointment(
-        self,
-        appointment_id: int,
-        reason: str = "Not specified"
+        self, appointment_id: int, reason: str = "Not specified"
     ) -> Dict[str, Any]:
         """
         Cancel an appointment.
@@ -273,16 +253,10 @@ class ToolRouter:
 
         except Exception as e:
             logger.error(f"Error cancelling appointment: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error cancelling appointment"
-            }
+            return {"success": False, "error": str(e), "message": "Error cancelling appointment"}
 
     async def _reschedule_appointment(
-        self,
-        appointment_id: int,
-        new_datetime: str
+        self, appointment_id: int, new_datetime: str
     ) -> Dict[str, Any]:
         """
         Reschedule an appointment to a new time.
@@ -305,11 +279,7 @@ class ToolRouter:
 
         except Exception as e:
             logger.error(f"Error rescheduling appointment: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error rescheduling appointment"
-            }
+            return {"success": False, "error": str(e), "message": "Error rescheduling appointment"}
 
     async def _decode_vin(self, vin: str) -> Dict[str, Any]:
         """
@@ -332,8 +302,4 @@ class ToolRouter:
 
         except Exception as e:
             logger.error(f"Error decoding VIN: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Error decoding VIN"
-            }
+            return {"success": False, "error": str(e), "message": "Error decoding VIN"}

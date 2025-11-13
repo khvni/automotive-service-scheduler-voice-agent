@@ -7,8 +7,8 @@ Tests functionality without requiring Redis or full app initialization.
 import asyncio
 import sys
 import time
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -16,21 +16,22 @@ sys.path.insert(0, str(project_root / "server"))
 
 # Set up minimal environment
 import os
+
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("OPENAI_API_KEY", "test")
 os.environ.setdefault("DEEPGRAM_API_KEY", "test")
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+# Import only the functions we need directly
+import sys
 
+from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.base import Base
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
-from app.models.appointment import Appointment, AppointmentStatus, ServiceType
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# Import only the functions we need directly
-import sys
 sys.path.insert(0, str(project_root / "server" / "app" / "tools"))
 
 
@@ -139,15 +140,19 @@ async def setup_test_database():
         print(f"  - Vehicle 2 ID: {vehicle2.id}")
         print(f"  - Appointment 1 ID: {appointment1.id}")
 
-        return engine, async_session_maker, {
-            "customer1_id": customer1.id,
-            "customer1_phone": customer1.phone_number,
-            "customer2_id": customer2.id,
-            "customer2_phone": customer2.phone_number,
-            "vehicle1_id": vehicle1.id,
-            "vehicle2_id": vehicle2.id,
-            "appointment1_id": appointment1.id,
-        }
+        return (
+            engine,
+            async_session_maker,
+            {
+                "customer1_id": customer1.id,
+                "customer1_phone": customer1.phone_number,
+                "customer2_id": customer2.id,
+                "customer2_phone": customer2.phone_number,
+                "vehicle1_id": vehicle1.id,
+                "vehicle2_id": vehicle2.id,
+                "appointment1_id": appointment1.id,
+            },
+        )
 
 
 async def main():
@@ -164,13 +169,13 @@ async def main():
 
         # Import tools dynamically to avoid circular import issues
         from crm_tools import (
-            lookup_customer,
-            get_available_slots,
             book_appointment,
-            get_upcoming_appointments,
             cancel_appointment,
-            reschedule_appointment,
             decode_vin,
+            get_available_slots,
+            get_upcoming_appointments,
+            lookup_customer,
+            reschedule_appointment,
         )
 
         print_header("Running Tests")
@@ -182,16 +187,22 @@ async def main():
             result = await lookup_customer(session, test_data["customer1_phone"])
             duration = (time.perf_counter() - start) * 1000
 
-            success = (result is not None and
-                      result.get("id") == test_data["customer1_id"] and
-                      len(result.get("vehicles", [])) == 1)
+            success = (
+                result is not None
+                and result.get("id") == test_data["customer1_id"]
+                and len(result.get("vehicles", [])) == 1
+            )
             if success:
                 passed += 1
                 print(f"  Customer found: {result.get('first_name')} {result.get('last_name')}")
             else:
                 failed += 1
-            print_test("lookup_customer (found)", success, duration,
-                      f"Target: <30ms, Actual: {duration:.2f}ms")
+            print_test(
+                "lookup_customer (found)",
+                success,
+                duration,
+                f"Target: <30ms, Actual: {duration:.2f}ms",
+            )
 
         # Test 2: get_available_slots
         print("\n2. Testing get_available_slots...")
@@ -203,8 +214,7 @@ async def main():
         result = await get_available_slots(tomorrow.isoformat(), duration_minutes=30)
         duration = (time.perf_counter() - start) * 1000
 
-        success = (result.get("success") is True and
-                  len(result.get("available_slots", [])) > 0)
+        success = result.get("success") is True and len(result.get("available_slots", [])) > 0
         if success:
             passed += 1
             print(f"  Found {len(result.get('available_slots', []))} slots for {tomorrow}")
@@ -227,20 +237,23 @@ async def main():
                 scheduled_at=future_time.isoformat(),
                 service_type="oil_change",
                 duration_minutes=30,
-                customer_concerns="Strange noise from engine"
+                customer_concerns="Strange noise from engine",
             )
             duration = (time.perf_counter() - start) * 1000
 
-            success = (result.get("success") is True and
-                      result.get("data", {}).get("appointment_id") is not None)
+            success = (
+                result.get("success") is True
+                and result.get("data", {}).get("appointment_id") is not None
+            )
             if success:
                 passed += 1
                 print(f"  Appointment booked: ID {result.get('data', {}).get('appointment_id')}")
                 test_data["new_appointment_id"] = result.get("data", {}).get("appointment_id")
             else:
                 failed += 1
-            print_test("book_appointment", success, duration,
-                      f"Target: <100ms, Actual: {duration:.2f}ms")
+            print_test(
+                "book_appointment", success, duration, f"Target: <100ms, Actual: {duration:.2f}ms"
+            )
 
         # Test 4: get_upcoming_appointments
         print("\n4. Testing get_upcoming_appointments...")
@@ -269,7 +282,7 @@ async def main():
             result = await reschedule_appointment(
                 db=session,
                 appointment_id=test_data["appointment1_id"],
-                new_datetime=new_time.isoformat()
+                new_datetime=new_time.isoformat(),
             )
             duration = (time.perf_counter() - start) * 1000
 
@@ -288,9 +301,7 @@ async def main():
 
             start = time.perf_counter()
             result = await cancel_appointment(
-                db=session,
-                appointment_id=appointment_id,
-                reason="Schedule conflict"
+                db=session, appointment_id=appointment_id, reason="Schedule conflict"
             )
             duration = (time.perf_counter() - start) * 1000
 
@@ -317,8 +328,7 @@ async def main():
             print(f"  Decoded: {data.get('year')} {data.get('make')} {data.get('model')}")
         else:
             failed += 1
-        print_test("decode_vin", success, duration,
-                  f"Target: <500ms, Actual: {duration:.2f}ms")
+        print_test("decode_vin", success, duration, f"Target: <500ms, Actual: {duration:.2f}ms")
 
         # Summary
         print_header("TEST SUMMARY")
@@ -337,6 +347,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test suite failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

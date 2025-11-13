@@ -8,32 +8,30 @@ Tests all 7 CRM tool functions with mock data and measures performance.
 import asyncio
 import sys
 import time
-from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from pathlib import Path
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "server"))
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
+from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.base import Base
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
-from app.models.appointment import Appointment, AppointmentStatus, ServiceType
+from app.services.redis_client import close_redis, init_redis
 from app.tools.crm_tools import (
-    lookup_customer,
-    get_available_slots,
     book_appointment,
-    get_upcoming_appointments,
     cancel_appointment,
-    reschedule_appointment,
     decode_vin,
+    get_available_slots,
+    get_upcoming_appointments,
+    lookup_customer,
+    reschedule_appointment,
 )
-from app.services.redis_client import init_redis, close_redis
-
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Test database URL (in-memory SQLite)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -48,12 +46,9 @@ class TestResults:
         self.tests = []
 
     def add_test(self, name: str, passed: bool, duration_ms: float, details: str = ""):
-        self.tests.append({
-            "name": name,
-            "passed": passed,
-            "duration_ms": duration_ms,
-            "details": details
-        })
+        self.tests.append(
+            {"name": name, "passed": passed, "duration_ms": duration_ms, "details": details}
+        )
         if passed:
             self.passed += 1
         else:
@@ -166,15 +161,19 @@ async def setup_test_database():
         print(f"  - Vehicle 2 ID: {vehicle2.id}, VIN: {vehicle2.vin}")
         print(f"  - Appointment 1 ID: {appointment1.id}")
 
-        return engine, async_session_maker, {
-            "customer1_id": customer1.id,
-            "customer1_phone": customer1.phone_number,
-            "customer2_id": customer2.id,
-            "customer2_phone": customer2.phone_number,
-            "vehicle1_id": vehicle1.id,
-            "vehicle2_id": vehicle2.id,
-            "appointment1_id": appointment1.id,
-        }
+        return (
+            engine,
+            async_session_maker,
+            {
+                "customer1_id": customer1.id,
+                "customer1_phone": customer1.phone_number,
+                "customer2_id": customer2.id,
+                "customer2_phone": customer2.phone_number,
+                "vehicle1_id": vehicle1.id,
+                "vehicle2_id": vehicle2.id,
+                "appointment1_id": appointment1.id,
+            },
+        )
 
 
 async def test_lookup_customer(session: AsyncSession, test_data: dict, results: TestResults):
@@ -193,10 +192,7 @@ async def test_lookup_customer(session: AsyncSession, test_data: dict, results: 
         and len(result.get("vehicles", [])) == 1
     )
     results.add_test(
-        "lookup_customer (found)",
-        success,
-        duration,
-        f"Target: <30ms, Actual: {duration:.2f}ms"
+        "lookup_customer (found)", success, duration, f"Target: <30ms, Actual: {duration:.2f}ms"
     )
     print(f"  Found customer: {result.get('first_name')} {result.get('last_name')}")
     print(f"  Vehicles: {len(result.get('vehicles', []))}")
@@ -208,11 +204,7 @@ async def test_lookup_customer(session: AsyncSession, test_data: dict, results: 
     duration = (time.perf_counter() - start) * 1000
 
     success = result is None
-    results.add_test(
-        "lookup_customer (not found)",
-        success,
-        duration
-    )
+    results.add_test("lookup_customer (not found)", success, duration)
     print(f"  Not found test: {result is None} ({duration:.2f}ms)")
 
 
@@ -229,15 +221,8 @@ async def test_get_available_slots(results: TestResults):
     result = await get_available_slots(tomorrow.isoformat(), duration_minutes=30)
     duration = (time.perf_counter() - start) * 1000
 
-    success = (
-        result.get("success") is True
-        and len(result.get("available_slots", [])) > 0
-    )
-    results.add_test(
-        "get_available_slots (weekday)",
-        success,
-        duration
-    )
+    success = result.get("success") is True and len(result.get("available_slots", [])) > 0
+    results.add_test("get_available_slots (weekday)", success, duration)
     print(f"  Date: {tomorrow} ({result.get('day_of_week')})")
     print(f"  Slots: {len(result.get('available_slots', []))}")
     print(f"  Duration: {duration:.2f}ms")
@@ -258,11 +243,7 @@ async def test_get_available_slots(results: TestResults):
         and len(result.get("available_slots", [])) == 0
         and "closed on Sundays" in result.get("message", "").lower()
     )
-    results.add_test(
-        "get_available_slots (Sunday closed)",
-        success,
-        duration
-    )
+    results.add_test("get_available_slots (Sunday closed)", success, duration)
     print(f"  Sunday test: {len(result.get('available_slots', []))} slots (expected 0)")
 
 
@@ -271,7 +252,9 @@ async def test_book_appointment(session: AsyncSession, test_data: dict, results:
     print("\n--- Test 3: book_appointment ---")
 
     # Test 3a: Valid booking
-    future_time = (datetime.now(timezone.utc) + timedelta(days=3)).replace(hour=10, minute=0, second=0, microsecond=0)
+    future_time = (datetime.now(timezone.utc) + timedelta(days=3)).replace(
+        hour=10, minute=0, second=0, microsecond=0
+    )
 
     start = time.perf_counter()
     result = await book_appointment(
@@ -281,19 +264,15 @@ async def test_book_appointment(session: AsyncSession, test_data: dict, results:
         scheduled_at=future_time.isoformat(),
         service_type="oil_change",
         duration_minutes=30,
-        customer_concerns="Strange noise from engine"
+        customer_concerns="Strange noise from engine",
     )
     duration = (time.perf_counter() - start) * 1000
 
     success = (
-        result.get("success") is True
-        and result.get("data", {}).get("appointment_id") is not None
+        result.get("success") is True and result.get("data", {}).get("appointment_id") is not None
     )
     results.add_test(
-        "book_appointment (valid)",
-        success,
-        duration,
-        f"Target: <100ms, Actual: {duration:.2f}ms"
+        "book_appointment (valid)", success, duration, f"Target: <100ms, Actual: {duration:.2f}ms"
     )
     print(f"  Booked: {result.get('success')}")
     print(f"  Appointment ID: {result.get('data', {}).get('appointment_id')}")
@@ -315,15 +294,13 @@ async def test_book_appointment(session: AsyncSession, test_data: dict, results:
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is False and "not found" in result.get("message", "").lower()
-    results.add_test(
-        "book_appointment (invalid customer)",
-        success,
-        duration
-    )
+    results.add_test("book_appointment (invalid customer)", success, duration)
     print(f"  Invalid customer test: {result.get('success') is False}")
 
 
-async def test_get_upcoming_appointments(session: AsyncSession, test_data: dict, results: TestResults):
+async def test_get_upcoming_appointments(
+    session: AsyncSession, test_data: dict, results: TestResults
+):
     """Test Tool 4: get_upcoming_appointments"""
     print("\n--- Test 4: get_upcoming_appointments ---")
 
@@ -334,11 +311,7 @@ async def test_get_upcoming_appointments(session: AsyncSession, test_data: dict,
 
     appointments = result.get("data", {}).get("appointments", [])
     success = result.get("success") is True and len(appointments) >= 1
-    results.add_test(
-        "get_upcoming_appointments (with appointments)",
-        success,
-        duration
-    )
+    results.add_test("get_upcoming_appointments (with appointments)", success, duration)
     print(f"  Customer 1 appointments: {len(appointments)}")
     print(f"  Duration: {duration:.2f}ms")
 
@@ -348,11 +321,7 @@ async def test_get_upcoming_appointments(session: AsyncSession, test_data: dict,
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is False
-    results.add_test(
-        "get_upcoming_appointments (invalid customer)",
-        success,
-        duration
-    )
+    results.add_test("get_upcoming_appointments (invalid customer)", success, duration)
     print(f"  Invalid customer test: {result.get('success') is False}")
 
 
@@ -361,22 +330,18 @@ async def test_reschedule_appointment(session: AsyncSession, test_data: dict, re
     print("\n--- Test 5: reschedule_appointment ---")
 
     # Test 5a: Valid reschedule
-    new_time = (datetime.now(timezone.utc) + timedelta(days=10)).replace(hour=14, minute=0, second=0, microsecond=0)
+    new_time = (datetime.now(timezone.utc) + timedelta(days=10)).replace(
+        hour=14, minute=0, second=0, microsecond=0
+    )
 
     start = time.perf_counter()
     result = await reschedule_appointment(
-        db=session,
-        appointment_id=test_data["appointment1_id"],
-        new_datetime=new_time.isoformat()
+        db=session, appointment_id=test_data["appointment1_id"], new_datetime=new_time.isoformat()
     )
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is True
-    results.add_test(
-        "reschedule_appointment (valid)",
-        success,
-        duration
-    )
+    results.add_test("reschedule_appointment (valid)", success, duration)
     print(f"  Rescheduled: {result.get('success')}")
     print(f"  New time: {result.get('data', {}).get('new_datetime')}")
     print(f"  Duration: {duration:.2f}ms")
@@ -384,18 +349,12 @@ async def test_reschedule_appointment(session: AsyncSession, test_data: dict, re
     # Test 5b: Invalid appointment
     start = time.perf_counter()
     result = await reschedule_appointment(
-        db=session,
-        appointment_id=99999,
-        new_datetime=new_time.isoformat()
+        db=session, appointment_id=99999, new_datetime=new_time.isoformat()
     )
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is False
-    results.add_test(
-        "reschedule_appointment (invalid)",
-        success,
-        duration
-    )
+    results.add_test("reschedule_appointment (invalid)", success, duration)
     print(f"  Invalid appointment test: {result.get('success') is False}")
 
 
@@ -409,37 +368,25 @@ async def test_cancel_appointment(session: AsyncSession, test_data: dict, result
     # Test 6a: Valid cancellation
     start = time.perf_counter()
     result = await cancel_appointment(
-        db=session,
-        appointment_id=appointment_id,
-        reason="Schedule conflict"
+        db=session, appointment_id=appointment_id, reason="Schedule conflict"
     )
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is True
-    results.add_test(
-        "cancel_appointment (valid)",
-        success,
-        duration
-    )
+    results.add_test("cancel_appointment (valid)", success, duration)
     print(f"  Cancelled: {result.get('success')}")
     print(f"  Reason: {result.get('data', {}).get('cancellation_reason')}")
     print(f"  Duration: {duration:.2f}ms")
 
     # Test 6b: Already cancelled
     start = time.perf_counter()
-    result = await cancel_appointment(
-        db=session,
-        appointment_id=appointment_id,
-        reason="Test"
-    )
+    result = await cancel_appointment(db=session, appointment_id=appointment_id, reason="Test")
     duration = (time.perf_counter() - start) * 1000
 
-    success = result.get("success") is False and "already cancelled" in result.get("error", "").lower()
-    results.add_test(
-        "cancel_appointment (already cancelled)",
-        success,
-        duration
+    success = (
+        result.get("success") is False and "already cancelled" in result.get("error", "").lower()
     )
+    results.add_test("cancel_appointment (already cancelled)", success, duration)
     print(f"  Already cancelled test: {result.get('success') is False}")
 
 
@@ -456,10 +403,7 @@ async def test_decode_vin(results: TestResults):
 
     success = result.get("success") is True
     results.add_test(
-        "decode_vin (valid)",
-        success,
-        duration,
-        f"Target: <500ms, Actual: {duration:.2f}ms"
+        "decode_vin (valid)", success, duration, f"Target: <500ms, Actual: {duration:.2f}ms"
     )
     print(f"  VIN: {valid_vin}")
     print(f"  Decoded: {result.get('success')}")
@@ -474,11 +418,7 @@ async def test_decode_vin(results: TestResults):
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is False
-    results.add_test(
-        "decode_vin (invalid length)",
-        success,
-        duration
-    )
+    results.add_test("decode_vin (invalid length)", success, duration)
     print(f"  Invalid VIN test: {result.get('success') is False}")
 
     # Test 7c: Invalid characters
@@ -487,11 +427,7 @@ async def test_decode_vin(results: TestResults):
     duration = (time.perf_counter() - start) * 1000
 
     success = result.get("success") is False
-    results.add_test(
-        "decode_vin (invalid characters)",
-        success,
-        duration
-    )
+    results.add_test("decode_vin (invalid characters)", success, duration)
     print(f"  Invalid characters test: {result.get('success') is False}")
 
 
@@ -543,6 +479,7 @@ async def main():
     except Exception as e:
         print(f"\n❌ Test suite failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

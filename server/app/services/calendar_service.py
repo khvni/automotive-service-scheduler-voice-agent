@@ -13,7 +13,7 @@ Uses OAuth2 refresh token flow for authentication.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from google.oauth2.credentials import Credentials
@@ -37,7 +37,7 @@ class CalendarService:
         client_id: str,
         client_secret: str,
         refresh_token: str,
-        timezone_name: str = "America/New_York"
+        timezone_name: str = "America/New_York",
     ):
         """
         Initialize Calendar Service.
@@ -55,7 +55,9 @@ class CalendarService:
         try:
             self.timezone = ZoneInfo(timezone_name)
         except Exception as e:
-            logger.warning(f"Invalid timezone {timezone_name}, falling back to America/New_York: {e}")
+            logger.warning(
+                f"Invalid timezone {timezone_name}, falling back to America/New_York: {e}"
+            )
             self.timezone = ZoneInfo("America/New_York")
 
         self._service = None
@@ -87,11 +89,11 @@ class CalendarService:
                 token_uri="https://oauth2.googleapis.com/token",
                 client_id=self.client_id,
                 client_secret=self.client_secret,
-                scopes=['https://www.googleapis.com/auth/calendar']
+                scopes=["https://www.googleapis.com/auth/calendar"],
             )
 
             logger.debug("Building calendar service...")
-            self._service = build('calendar', 'v3', credentials=creds)
+            self._service = build("calendar", "v3", credentials=creds)
             logger.info("Calendar service created successfully")
 
             return self._service
@@ -101,10 +103,7 @@ class CalendarService:
             raise
 
     async def get_free_availability(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        duration_minutes: int = 30
+        self, start_time: datetime, end_time: datetime, duration_minutes: int = 30
     ) -> List[Dict[str, Any]]:
         """
         Get available time slots within a date range.
@@ -144,25 +143,21 @@ class CalendarService:
             logger.info(f"Querying freebusy from {start_time_utc} to {end_time_utc}")
 
             body = {
-                'timeMin': start_time_utc.isoformat(),
-                'timeMax': end_time_utc.isoformat(),
-                'items': [{'id': 'primary'}]
+                "timeMin": start_time_utc.isoformat(),
+                "timeMax": end_time_utc.isoformat(),
+                "items": [{"id": "primary"}],
             }
 
             # Run blocking API call in executor
             freebusy_response = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.freebusy().query(body=body).execute()
+                None, lambda: service.freebusy().query(body=body).execute()
             )
 
             logger.debug(f"Freebusy response: {freebusy_response}")
 
             # Process response to calculate free slots
             free_slots = self._process_freebusy_response(
-                freebusy_response,
-                start_time,
-                end_time,
-                duration_minutes
+                freebusy_response, start_time, end_time, duration_minutes
             )
 
             logger.info(f"Found {len(free_slots)} free slots")
@@ -181,7 +176,7 @@ class CalendarService:
         start_time: datetime,
         end_time: datetime,
         description: str = "",
-        attendees: Optional[List[str]] = None
+        attendees: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Create a new calendar event.
@@ -221,58 +216,56 @@ class CalendarService:
             logger.info(f"Creating calendar event: {title} at {start_time_utc}")
 
             event = {
-                'summary': title,
-                'description': description,
-                'start': {
-                    'dateTime': start_time_utc.isoformat(),
-                    'timeZone': 'UTC',
+                "summary": title,
+                "description": description,
+                "start": {
+                    "dateTime": start_time_utc.isoformat(),
+                    "timeZone": "UTC",
                 },
-                'end': {
-                    'dateTime': end_time_utc.isoformat(),
-                    'timeZone': 'UTC',
+                "end": {
+                    "dateTime": end_time_utc.isoformat(),
+                    "timeZone": "UTC",
                 },
             }
 
             # Add attendees if provided
             if attendees:
-                event['attendees'] = [{'email': email} for email in attendees]
-                event['guestsCanModify'] = False
-                event['guestsCanInviteOthers'] = False
+                event["attendees"] = [{"email": email} for email in attendees]
+                event["guestsCanModify"] = False
+                event["guestsCanInviteOthers"] = False
 
             # Run blocking API call in executor
             created_event = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: service.events().insert(
-                    calendarId='primary',
-                    body=event,
-                    sendUpdates='all'
-                ).execute()
+                lambda: service.events()
+                .insert(calendarId="primary", body=event, sendUpdates="all")
+                .execute(),
             )
 
             logger.info(f"Event created successfully: {created_event['id']}")
 
             return {
-                'success': True,
-                'event_id': created_event.get('id'),
-                'calendar_link': created_event.get('htmlLink'),
-                'message': f"Event '{title}' scheduled successfully"
+                "success": True,
+                "event_id": created_event.get("id"),
+                "calendar_link": created_event.get("htmlLink"),
+                "message": f"Event '{title}' scheduled successfully",
             }
 
         except HttpError as e:
             logger.error(f"Google Calendar API error in create_calendar_event: {e}")
             return {
-                'success': False,
-                'event_id': None,
-                'calendar_link': None,
-                'message': f"Failed to create event: {e}"
+                "success": False,
+                "event_id": None,
+                "calendar_link": None,
+                "message": f"Failed to create event: {e}",
             }
         except Exception as e:
             logger.error(f"Error creating calendar event: {e}", exc_info=True)
             return {
-                'success': False,
-                'event_id': None,
-                'calendar_link': None,
-                'message': f"Failed to create event: {str(e)}"
+                "success": False,
+                "event_id": None,
+                "calendar_link": None,
+                "message": f"Failed to create event: {str(e)}",
             }
 
     async def update_calendar_event(
@@ -282,7 +275,7 @@ class CalendarService:
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
         description: Optional[str] = None,
-        attendees: Optional[List[str]] = None
+        attendees: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         Update an existing calendar event.
@@ -317,18 +310,14 @@ class CalendarService:
 
             # Get existing event
             event = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.events().get(
-                    calendarId='primary',
-                    eventId=event_id
-                ).execute()
+                None, lambda: service.events().get(calendarId="primary", eventId=event_id).execute()
             )
 
             # Update provided fields
             if title:
-                event['summary'] = title
+                event["summary"] = title
             if description is not None:  # Allow empty string
-                event['description'] = description
+                event["description"] = description
 
             # Update time if both start and end provided
             if start_time and end_time:
@@ -342,54 +331,51 @@ class CalendarService:
                 start_time_utc = start_time.astimezone(timezone.utc)
                 end_time_utc = end_time.astimezone(timezone.utc)
 
-                event['start'] = {
-                    'dateTime': start_time_utc.isoformat(),
-                    'timeZone': 'UTC',
+                event["start"] = {
+                    "dateTime": start_time_utc.isoformat(),
+                    "timeZone": "UTC",
                 }
-                event['end'] = {
-                    'dateTime': end_time_utc.isoformat(),
-                    'timeZone': 'UTC',
+                event["end"] = {
+                    "dateTime": end_time_utc.isoformat(),
+                    "timeZone": "UTC",
                 }
 
             # Update attendees if provided
             if attendees is not None:
-                event['attendees'] = [{'email': email} for email in attendees]
+                event["attendees"] = [{"email": email} for email in attendees]
 
             # Run blocking API call in executor
             updated_event = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: service.events().update(
-                    calendarId='primary',
-                    eventId=event_id,
-                    body=event,
-                    sendUpdates='all'
-                ).execute()
+                lambda: service.events()
+                .update(calendarId="primary", eventId=event_id, body=event, sendUpdates="all")
+                .execute(),
             )
 
             logger.info(f"Event updated successfully: {event_id}")
 
             return {
-                'success': True,
-                'event_id': updated_event.get('id'),
-                'calendar_link': updated_event.get('htmlLink'),
-                'message': 'Event updated successfully'
+                "success": True,
+                "event_id": updated_event.get("id"),
+                "calendar_link": updated_event.get("htmlLink"),
+                "message": "Event updated successfully",
             }
 
         except HttpError as e:
             logger.error(f"Google Calendar API error in update_calendar_event: {e}")
             return {
-                'success': False,
-                'event_id': event_id,
-                'calendar_link': None,
-                'message': f"Failed to update event: {e}"
+                "success": False,
+                "event_id": event_id,
+                "calendar_link": None,
+                "message": f"Failed to update event: {e}",
             }
         except Exception as e:
             logger.error(f"Error updating calendar event: {e}", exc_info=True)
             return {
-                'success': False,
-                'event_id': event_id,
-                'calendar_link': None,
-                'message': f"Failed to update event: {str(e)}"
+                "success": False,
+                "event_id": event_id,
+                "calendar_link": None,
+                "message": f"Failed to update event: {str(e)}",
             }
 
     async def cancel_calendar_event(self, event_id: str) -> Dict[str, bool]:
@@ -417,32 +403,21 @@ class CalendarService:
             # Run blocking API call in executor
             await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: service.events().delete(
-                    calendarId='primary',
-                    eventId=event_id,
-                    sendUpdates='all'
-                ).execute()
+                lambda: service.events()
+                .delete(calendarId="primary", eventId=event_id, sendUpdates="all")
+                .execute(),
             )
 
             logger.info(f"Event cancelled successfully: {event_id}")
 
-            return {
-                'success': True,
-                'message': 'Event cancelled successfully'
-            }
+            return {"success": True, "message": "Event cancelled successfully"}
 
         except HttpError as e:
             logger.error(f"Google Calendar API error in cancel_calendar_event: {e}")
-            return {
-                'success': False,
-                'message': f"Failed to cancel event: {e}"
-            }
+            return {"success": False, "message": f"Failed to cancel event: {e}"}
         except Exception as e:
             logger.error(f"Error cancelling calendar event: {e}", exc_info=True)
-            return {
-                'success': False,
-                'message': f"Failed to cancel event: {str(e)}"
-            }
+            return {"success": False, "message": f"Failed to cancel event: {str(e)}"}
 
     async def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -464,11 +439,7 @@ class CalendarService:
 
             # Run blocking API call in executor
             event = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.events().get(
-                    calendarId='primary',
-                    eventId=event_id
-                ).execute()
+                None, lambda: service.events().get(calendarId="primary", eventId=event_id).execute()
             )
 
             logger.info(f"Event retrieved successfully: {event_id}")
@@ -489,7 +460,7 @@ class CalendarService:
         freebusy_response: Dict[str, Any],
         start_time: datetime,
         end_time: datetime,
-        duration_minutes: int
+        duration_minutes: int,
     ) -> List[Dict[str, datetime]]:
         """
         Calculate free slots from Google Calendar freebusy response.
@@ -511,7 +482,7 @@ class CalendarService:
             List of free slots with start/end times
         """
         try:
-            busy_periods = freebusy_response.get('calendars', {}).get('primary', {}).get('busy', [])
+            busy_periods = freebusy_response.get("calendars", {}).get("primary", {}).get("busy", [])
             logger.debug(f"Found {len(busy_periods)} busy periods")
 
             free_slots = []
@@ -520,12 +491,12 @@ class CalendarService:
             # Process each busy period
             for busy in busy_periods:
                 # Parse busy period times
-                busy_start_str = busy['start']
-                busy_end_str = busy['end']
+                busy_start_str = busy["start"]
+                busy_end_str = busy["end"]
 
                 # Handle both Z and +00:00 timezone formats
-                busy_start = datetime.fromisoformat(busy_start_str.replace('Z', '+00:00'))
-                busy_end = datetime.fromisoformat(busy_end_str.replace('Z', '+00:00'))
+                busy_start = datetime.fromisoformat(busy_start_str.replace("Z", "+00:00"))
+                busy_end = datetime.fromisoformat(busy_end_str.replace("Z", "+00:00"))
 
                 # Convert to local timezone
                 busy_start = busy_start.astimezone(self.timezone)
@@ -538,7 +509,9 @@ class CalendarService:
                     if slot_duration >= duration_minutes:
                         # Check if slot overlaps with lunch (12-1 PM)
                         free_slots.extend(
-                            self._split_slot_around_lunch(current_time, busy_start, duration_minutes)
+                            self._split_slot_around_lunch(
+                                current_time, busy_start, duration_minutes
+                            )
                         )
 
                 # Move current time to end of busy period
@@ -561,10 +534,7 @@ class CalendarService:
             return []
 
     def _split_slot_around_lunch(
-        self,
-        slot_start: datetime,
-        slot_end: datetime,
-        duration_minutes: int
+        self, slot_start: datetime, slot_end: datetime, duration_minutes: int
     ) -> List[Dict[str, datetime]]:
         """
         Split a free slot around lunch hour (12-1 PM).
@@ -591,15 +561,15 @@ class CalendarService:
             if slot_start < lunch_start:
                 morning_duration = (lunch_start - slot_start).total_seconds() / 60
                 if morning_duration >= duration_minutes:
-                    slots.append({'start': slot_start, 'end': lunch_start})
+                    slots.append({"start": slot_start, "end": lunch_start})
 
             # Afternoon slot (after lunch)
             if slot_end > lunch_end:
                 afternoon_duration = (slot_end - lunch_end).total_seconds() / 60
                 if afternoon_duration >= duration_minutes:
-                    slots.append({'start': lunch_end, 'end': slot_end})
+                    slots.append({"start": lunch_end, "end": slot_end})
         else:
             # No lunch overlap, add entire slot
-            slots.append({'start': slot_start, 'end': slot_end})
+            slots.append({"start": slot_start, "end": slot_end})
 
         return slots

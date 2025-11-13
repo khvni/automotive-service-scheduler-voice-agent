@@ -35,5 +35,8 @@ class WorkerSettings(BaseSettings):
     REMINDER_CRON_SCHEDULE: str = "0 9 * * *"  # Run daily at 9 AM
     REMINDER_DAYS_BEFORE: int = 1  # Remind 1 day before appointment
 
+    # POC Safety: Only call this number for testing
+    YOUR_TEST_NUMBER: str = ""  # Set to your test phone number (e.g., +1234567890)
+
 
 settings = WorkerSettings()

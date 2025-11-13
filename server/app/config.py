@@ -2,8 +2,9 @@
 Application configuration using pydantic-settings.
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -38,6 +39,9 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""
     TWILIO_WEBHOOK_URL: str = ""
+    BASE_URL: str = (
+        "https://your-domain.ngrok.io"  # Public URL for webhooks (ngrok during development)
+    )
 
     # Deepgram STT
     DEEPGRAM_API_KEY: str = ""

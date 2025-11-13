@@ -1,18 +1,64 @@
 """Customer model."""
 
 import re
-from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text
-from sqlalchemy.orm import relationship, validates
 
 from app.models.base import Base, TimestampMixin
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Text
+from sqlalchemy.orm import relationship, validates
 
 # US state codes for validation
 US_STATES = {
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "ID",
+    "IL",
+    "IN",
+    "IA",
+    "KS",
+    "KY",
+    "LA",
+    "ME",
+    "MD",
+    "MA",
+    "MI",
+    "MN",
+    "MS",
+    "MO",
+    "MT",
+    "NE",
+    "NV",
+    "NH",
+    "NJ",
+    "NM",
+    "NY",
+    "NC",
+    "ND",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VT",
+    "VA",
+    "WA",
+    "WV",
+    "WI",
+    "WY",
+    "DC",
 }
 
 
@@ -66,10 +112,12 @@ class Customer(Base, TimestampMixin):
 
     # Relationships
     vehicles = relationship("Vehicle", back_populates="customer", cascade="all, delete-orphan")
-    appointments = relationship("Appointment", back_populates="customer", cascade="all, delete-orphan")
+    appointments = relationship(
+        "Appointment", back_populates="customer", cascade="all, delete-orphan"
+    )
     call_logs = relationship("CallLog", back_populates="customer", cascade="all, delete-orphan")
 
-    @validates('phone_number')
+    @validates("phone_number")
     def validate_phone_number(self, key, value):
         """Validate phone number format and length.
 
@@ -82,10 +130,10 @@ class Customer(Base, TimestampMixin):
 
         # HIGH FIX: Sanitize and validate phone number format
         # Remove all whitespace and allowed formatting characters to count digits
-        digits_only = re.sub(r'[\s\-\(\)\+]', '', value)
+        digits_only = re.sub(r"[\s\-\(\)\+]", "", value)
 
         # Validate that remaining characters are only digits
-        if not re.match(r'^\d+$', digits_only):
+        if not re.match(r"^\d+$", digits_only):
             raise ValueError(f"Phone number contains invalid characters: {value}")
 
         # HIGH FIX: Enforce 10-15 digit requirement
@@ -98,7 +146,7 @@ class Customer(Base, TimestampMixin):
 
         return value
 
-    @validates('email')
+    @validates("email")
     def validate_email(self, key, value):
         """Validate email format and length.
 
@@ -117,13 +165,15 @@ class Customer(Base, TimestampMixin):
 
         # HIGH FIX: Validate email format with regex
         # Pattern: local-part@domain with proper character restrictions
-        email_pattern = r'^[a-z0-9]([a-z0-9._-]*[a-z0-9])?@[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$'
+        email_pattern = (
+            r"^[a-z0-9]([a-z0-9._-]*[a-z0-9])?@[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$"
+        )
         if not re.match(email_pattern, value):
             raise ValueError(f"Invalid email format: {value}")
 
         return value
 
-    @validates('state')
+    @validates("state")
     def validate_state(self, key, value):
         """Validate US state code."""
         if value and value.upper() not in US_STATES:

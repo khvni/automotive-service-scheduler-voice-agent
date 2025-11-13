@@ -7,13 +7,12 @@ for analytics, debugging, and performance monitoring.
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import insert
+from typing import Any, Dict, Optional
 
 from app.models.call_log import CallLog
 from app.services.redis_client import update_session
+from sqlalchemy import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ async def log_call_event(
     call_sid: str,
     event_type: str,
     data: Dict[str, Any],
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """
     Log a call event to database and Redis.
@@ -51,10 +50,13 @@ async def log_call_event(
         # Note: This is a simplified version. Feature 9 will add comprehensive logging.
 
         # Log to Redis session for real-time tracking
-        await update_session(call_sid, {
-            f"last_event_{event_type}": datetime.now(timezone.utc).isoformat(),
-            f"event_data_{event_type}": data,
-        })
+        await update_session(
+            call_sid,
+            {
+                f"last_event_{event_type}": datetime.now(timezone.utc).isoformat(),
+                f"event_data_{event_type}": data,
+            },
+        )
 
         logger.info(f"Call event logged: {event_type} for call {call_sid}")
         return True
@@ -65,10 +67,7 @@ async def log_call_event(
 
 
 async def log_transcript(
-    call_sid: str,
-    role: str,
-    content: str,
-    timestamp: Optional[datetime] = None
+    call_sid: str, role: str, content: str, timestamp: Optional[datetime] = None
 ) -> bool:
     """
     Log a transcript message (user or assistant).
@@ -85,13 +84,16 @@ async def log_transcript(
     try:
         timestamp = timestamp or datetime.now(timezone.utc)
 
-        await update_session(call_sid, {
-            "last_transcript": {
-                "role": role,
-                "content": content,
-                "timestamp": timestamp.isoformat()
-            }
-        })
+        await update_session(
+            call_sid,
+            {
+                "last_transcript": {
+                    "role": role,
+                    "content": content,
+                    "timestamp": timestamp.isoformat(),
+                }
+            },
+        )
 
         logger.debug(f"Transcript logged for call {call_sid}: {role}")
         return True
@@ -102,10 +104,7 @@ async def log_transcript(
 
 
 async def log_performance_metric(
-    call_sid: str,
-    metric_name: str,
-    value: float,
-    unit: str = "ms"
+    call_sid: str, metric_name: str, value: float, unit: str = "ms"
 ) -> bool:
     """
     Log a performance metric.
@@ -120,10 +119,13 @@ async def log_performance_metric(
         True if logged successfully
     """
     try:
-        await update_session(call_sid, {
-            f"metric_{metric_name}": value,
-            f"metric_{metric_name}_unit": unit,
-        })
+        await update_session(
+            call_sid,
+            {
+                f"metric_{metric_name}": value,
+                f"metric_{metric_name}_unit": unit,
+            },
+        )
 
         logger.debug(f"Performance metric logged: {metric_name}={value}{unit}")
         return True
@@ -138,7 +140,7 @@ async def finalize_call_log(
     call_sid: str,
     total_duration: float,
     conversation_history: list,
-    token_usage: Dict[str, int]
+    token_usage: Dict[str, int],
 ) -> bool:
     """
     Finalize call log with summary data.
@@ -157,14 +159,19 @@ async def finalize_call_log(
         # TODO: Implement database insertion for CallLog table
         # For now, just update Redis with final summary
 
-        await update_session(call_sid, {
-            "total_duration": total_duration,
-            "total_messages": len(conversation_history),
-            "total_tokens": token_usage.get("total_tokens", 0),
-            "finalized_at": datetime.now(timezone.utc).isoformat(),
-        })
+        await update_session(
+            call_sid,
+            {
+                "total_duration": total_duration,
+                "total_messages": len(conversation_history),
+                "total_tokens": token_usage.get("total_tokens", 0),
+                "finalized_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
-        logger.info(f"Call log finalized for {call_sid}: {total_duration}s, {len(conversation_history)} messages")
+        logger.info(
+            f"Call log finalized for {call_sid}: {total_duration}s, {len(conversation_history)} messages"
+        )
         return True
 
     except Exception as e:

@@ -4,23 +4,22 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
 from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
+from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
-from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.services.redis_client import (
     cache_customer,
     get_cached_customer,
-    invalidate_customer_cache,
     get_redis,
+    invalidate_customer_cache,
 )
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +35,7 @@ HTTP_TIMEOUT = 5.0  # seconds
 # ============================================================================
 
 
-async def lookup_customer(
-    db: AsyncSession, phone: str
-) -> Optional[Dict[str, Any]]:
+async def lookup_customer(db: AsyncSession, phone: str) -> Optional[Dict[str, Any]]:
     """
     Look up customer by phone number with caching.
 
@@ -107,8 +104,12 @@ async def lookup_customer(
             "last_name": customer.last_name,
             "email": customer.email,
             "phone_number": customer.phone_number,
-            "customer_since": customer.customer_since.isoformat() if customer.customer_since else None,
-            "last_service_date": customer.last_service_date.isoformat() if customer.last_service_date else None,
+            "customer_since": (
+                customer.customer_since.isoformat() if customer.customer_since else None
+            ),
+            "last_service_date": (
+                customer.last_service_date.isoformat() if customer.last_service_date else None
+            ),
             "vehicles": [
                 {
                     "id": v.id,
@@ -142,9 +143,7 @@ async def lookup_customer(
 # ============================================================================
 
 
-async def get_available_slots(
-    date: str, duration_minutes: int = 30
-) -> Dict[str, Any]:
+async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str, Any]:
     """
     Get available appointment slots for a given date (POC mock implementation).
 
@@ -186,7 +185,7 @@ async def get_available_slots(
                 "date": date,
                 "day_of_week": day_of_week,
                 "available_slots": [],
-                "message": "We are closed on Sundays"
+                "message": "We are closed on Sundays",
             }
 
         # Determine business hours
@@ -224,7 +223,7 @@ async def get_available_slots(
             "date": date,
             "day_of_week": day_of_week,
             "available_slots": slots,
-            "message": f"Found {len(slots)} available time slots"
+            "message": f"Found {len(slots)} available time slots",
         }
 
     except ValueError as e:
@@ -232,15 +231,11 @@ async def get_available_slots(
         return {
             "success": False,
             "error": "Invalid date format. Please use YYYY-MM-DD (e.g., 2025-01-15)",
-            "message": "Invalid date format"
+            "message": "Invalid date format",
         }
     except Exception as e:
         logger.error(f"Error generating slots for {date}: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error generating available slots"
-        }
+        return {"success": False, "error": str(e), "message": "Error generating available slots"}
 
 
 # ============================================================================
@@ -302,7 +297,7 @@ async def book_appointment(
             return {
                 "success": False,
                 "error": f"Customer ID {customer_id} not found",
-                "message": "Customer not found"
+                "message": "Customer not found",
             }
 
         # Validate vehicle exists and belongs to customer
@@ -312,17 +307,15 @@ async def book_appointment(
             return {
                 "success": False,
                 "error": f"Vehicle ID {vehicle_id} not found",
-                "message": "Vehicle not found"
+                "message": "Vehicle not found",
             }
 
         if vehicle.customer_id != customer_id:
-            logger.warning(
-                f"Vehicle {vehicle_id} does not belong to customer {customer_id}"
-            )
+            logger.warning(f"Vehicle {vehicle_id} does not belong to customer {customer_id}")
             return {
                 "success": False,
                 "error": f"Vehicle {vehicle_id} does not belong to customer {customer_id}",
-                "message": "Vehicle does not belong to this customer"
+                "message": "Vehicle does not belong to this customer",
             }
 
         # Parse scheduled datetime
@@ -336,7 +329,7 @@ async def book_appointment(
             return {
                 "success": False,
                 "error": "Invalid datetime format. Use ISO format (e.g., 2025-01-15T09:00:00)",
-                "message": "Invalid datetime format"
+                "message": "Invalid datetime format",
             }
 
         # Validate service_type enum
@@ -348,7 +341,7 @@ async def book_appointment(
             return {
                 "success": False,
                 "error": f"Invalid service_type. Must be one of: {', '.join(valid_types)}",
-                "message": "Invalid service type"
+                "message": "Invalid service type",
             }
 
         # Create appointment
@@ -396,17 +389,13 @@ async def book_appointment(
                 "duration_minutes": duration_minutes,
                 "status": appointment.status.value,
             },
-            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}"
+            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}",
         }
 
     except Exception as e:
         logger.error(f"Error booking appointment: {e}", exc_info=True)
         await db.rollback()
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error booking appointment"
-        }
+        return {"success": False, "error": str(e), "message": "Error booking appointment"}
 
 
 # ============================================================================
@@ -414,9 +403,7 @@ async def book_appointment(
 # ============================================================================
 
 
-async def get_upcoming_appointments(
-    db: AsyncSession, customer_id: int
-) -> Dict[str, Any]:
+async def get_upcoming_appointments(db: AsyncSession, customer_id: int) -> Dict[str, Any]:
     """
     Get upcoming appointments for a customer.
 
@@ -460,7 +447,7 @@ async def get_upcoming_appointments(
             return {
                 "success": False,
                 "error": f"Customer ID {customer_id} not found",
-                "message": "Customer not found"
+                "message": "Customer not found",
             }
 
         # Query upcoming appointments
@@ -471,10 +458,7 @@ async def get_upcoming_appointments(
             .where(
                 Appointment.customer_id == customer_id,
                 Appointment.scheduled_at > now,
-                Appointment.status.in_([
-                    AppointmentStatus.SCHEDULED,
-                    AppointmentStatus.CONFIRMED
-                ])
+                Appointment.status.in_([AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]),
             )
             .order_by(Appointment.scheduled_at.asc())
         )
@@ -485,22 +469,24 @@ async def get_upcoming_appointments(
         # Build response
         appointments_data = []
         for appt in appointments:
-            appointments_data.append({
-                "appointment_id": appt.id,
-                "scheduled_at": appt.scheduled_at.isoformat(),
-                "service_type": appt.service_type.value,
-                "duration_minutes": appt.duration_minutes,
-                "status": appt.status.value,
-                "vehicle": {
-                    "id": appt.vehicle.id,
-                    "year": appt.vehicle.year,
-                    "make": appt.vehicle.make,
-                    "model": appt.vehicle.model,
-                    "vin": appt.vehicle.vin,
-                },
-                "service_description": appt.service_description,
-                "confirmation_sent": appt.confirmation_sent,
-            })
+            appointments_data.append(
+                {
+                    "appointment_id": appt.id,
+                    "scheduled_at": appt.scheduled_at.isoformat(),
+                    "service_type": appt.service_type.value,
+                    "duration_minutes": appt.duration_minutes,
+                    "status": appt.status.value,
+                    "vehicle": {
+                        "id": appt.vehicle.id,
+                        "year": appt.vehicle.year,
+                        "make": appt.vehicle.make,
+                        "model": appt.vehicle.model,
+                        "vin": appt.vehicle.vin,
+                    },
+                    "service_description": appt.service_description,
+                    "confirmation_sent": appt.confirmation_sent,
+                }
+            )
 
         logger.info(
             f"Found {len(appointments_data)} upcoming appointments for customer {customer_id}"
@@ -512,16 +498,12 @@ async def get_upcoming_appointments(
                 "customer_id": customer_id,
                 "appointments": appointments_data,
             },
-            "message": f"Found {len(appointments_data)} upcoming appointment{'s' if len(appointments_data) != 1 else ''}"
+            "message": f"Found {len(appointments_data)} upcoming appointment{'s' if len(appointments_data) != 1 else ''}",
         }
 
     except Exception as e:
         logger.error(f"Error getting appointments for customer {customer_id}: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error retrieving appointments"
-        }
+        return {"success": False, "error": str(e), "message": "Error retrieving appointments"}
 
 
 # ============================================================================
@@ -529,9 +511,7 @@ async def get_upcoming_appointments(
 # ============================================================================
 
 
-async def cancel_appointment(
-    db: AsyncSession, appointment_id: int, reason: str
-) -> Dict[str, Any]:
+async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str) -> Dict[str, Any]:
     """
     Cancel an appointment.
 
@@ -564,7 +544,7 @@ async def cancel_appointment(
             return {
                 "success": False,
                 "error": f"Appointment ID {appointment_id} not found",
-                "message": "Appointment not found"
+                "message": "Appointment not found",
             }
 
         # Check if already cancelled
@@ -573,7 +553,7 @@ async def cancel_appointment(
             return {
                 "success": False,
                 "error": "Appointment is already cancelled",
-                "message": "Appointment is already cancelled"
+                "message": "Appointment is already cancelled",
             }
 
         # Update appointment
@@ -585,9 +565,7 @@ async def cancel_appointment(
         await db.commit()
         await db.refresh(appointment)
 
-        logger.info(
-            f"Appointment {appointment_id} cancelled. Reason: {reason}"
-        )
+        logger.info(f"Appointment {appointment_id} cancelled. Reason: {reason}")
 
         # Invalidate customer cache
         customer = await db.get(Customer, appointment.customer_id)
@@ -602,17 +580,13 @@ async def cancel_appointment(
                 "cancellation_reason": reason,
                 "cancelled_at": cancelled_at.isoformat(),
             },
-            "message": f"Appointment cancelled successfully. Reason: {reason}"
+            "message": f"Appointment cancelled successfully. Reason: {reason}",
         }
 
     except Exception as e:
         logger.error(f"Error cancelling appointment {appointment_id}: {e}", exc_info=True)
         await db.rollback()
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error cancelling appointment"
-        }
+        return {"success": False, "error": str(e), "message": "Error cancelling appointment"}
 
 
 # ============================================================================
@@ -656,7 +630,7 @@ async def reschedule_appointment(
             return {
                 "success": False,
                 "error": f"Appointment ID {appointment_id} not found",
-                "message": "Appointment not found"
+                "message": "Appointment not found",
             }
 
         # Check if cancelled
@@ -665,7 +639,7 @@ async def reschedule_appointment(
             return {
                 "success": False,
                 "error": "Cannot reschedule a cancelled appointment",
-                "message": "Cannot reschedule cancelled appointment"
+                "message": "Cannot reschedule cancelled appointment",
             }
 
         # Parse new datetime
@@ -679,7 +653,7 @@ async def reschedule_appointment(
             return {
                 "success": False,
                 "error": "Invalid datetime format. Use ISO format (e.g., 2025-01-16T14:00:00)",
-                "message": "Invalid datetime format"
+                "message": "Invalid datetime format",
             }
 
         # Store old datetime for response
@@ -709,17 +683,13 @@ async def reschedule_appointment(
                 "service_type": appointment.service_type.value,
                 "status": appointment.status.value,
             },
-            "message": f"Appointment rescheduled successfully to {new_scheduled_at.strftime('%B %d, %Y at %I:%M %p')}"
+            "message": f"Appointment rescheduled successfully to {new_scheduled_at.strftime('%B %d, %Y at %I:%M %p')}",
         }
 
     except Exception as e:
         logger.error(f"Error rescheduling appointment {appointment_id}: {e}", exc_info=True)
         await db.rollback()
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error rescheduling appointment"
-        }
+        return {"success": False, "error": str(e), "message": "Error rescheduling appointment"}
 
 
 # ============================================================================
@@ -762,17 +732,17 @@ async def decode_vin(vin: str) -> Dict[str, Any]:
             return {
                 "success": False,
                 "error": f"VIN must be exactly 17 characters, got {len(vin_upper)}",
-                "message": "Invalid VIN length"
+                "message": "Invalid VIN length",
             }
 
         # VIN regex - alphanumeric excluding I, O, Q
-        vin_pattern = r'^[A-HJ-NPR-Z0-9]{17}$'
+        vin_pattern = r"^[A-HJ-NPR-Z0-9]{17}$"
         if not re.match(vin_pattern, vin_upper):
             logger.warning(f"Invalid VIN format: {vin_upper}")
             return {
                 "success": False,
                 "error": "Invalid VIN format. VIN must contain only letters (except I, O, Q) and numbers",
-                "message": "Invalid VIN format"
+                "message": "Invalid VIN format",
             }
 
         # Check cache first
@@ -781,12 +751,10 @@ async def decode_vin(vin: str) -> Dict[str, Any]:
 
         if redis_client:
             try:
-                cached_result = await asyncio.wait_for(
-                    redis_client.get(cache_key),
-                    timeout=2.0
-                )
+                cached_result = await asyncio.wait_for(redis_client.get(cache_key), timeout=2.0)
                 if cached_result:
                     import json
+
                     logger.info(f"VIN cache hit: {vin_upper}")
                     return json.loads(cached_result)
             except asyncio.TimeoutError:
@@ -837,7 +805,7 @@ async def decode_vin(vin: str) -> Dict[str, Any]:
             return {
                 "success": False,
                 "error": f"Invalid VIN or unable to decode: {error_text}",
-                "message": "Invalid VIN"
+                "message": "Invalid VIN",
             }
 
         # Build response
@@ -851,20 +819,16 @@ async def decode_vin(vin: str) -> Dict[str, Any]:
                 "vehicle_type": vehicle_type,
                 "manufacturer": manufacturer,
             },
-            "message": f"VIN decoded successfully: {year} {make} {model}"
+            "message": f"VIN decoded successfully: {year} {make} {model}",
         }
 
         # Cache successful result (7 days)
         if redis_client:
             try:
                 import json
+
                 await asyncio.wait_for(
-                    redis_client.setex(
-                        cache_key,
-                        VIN_CACHE_TTL,
-                        json.dumps(result)
-                    ),
-                    timeout=2.0
+                    redis_client.setex(cache_key, VIN_CACHE_TTL, json.dumps(result)), timeout=2.0
                 )
                 logger.info(f"VIN cached: {vin_upper}")
             except asyncio.TimeoutError:
@@ -879,19 +843,15 @@ async def decode_vin(vin: str) -> Dict[str, Any]:
         return {
             "success": False,
             "error": "NHTSA API request timed out",
-            "message": "VIN decode service timeout"
+            "message": "VIN decode service timeout",
         }
     except httpx.HTTPStatusError as e:
         logger.error(f"NHTSA API HTTP error for VIN {vin}: {e}")
         return {
             "success": False,
             "error": f"NHTSA API error: {e.response.status_code}",
-            "message": "VIN decode service error"
+            "message": "VIN decode service error",
         }
     except Exception as e:
         logger.error(f"Error decoding VIN {vin}: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Error decoding VIN"
-        }
+        return {"success": False, "error": str(e), "message": "Error decoding VIN"}

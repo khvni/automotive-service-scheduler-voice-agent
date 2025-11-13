@@ -7,13 +7,9 @@ using Deepgram's nova-2-phonecall model optimized for phone audio quality.
 
 import asyncio
 import logging
-from typing import Optional, Dict, Any, List
-from deepgram import (
-    DeepgramClient,
-    DeepgramClientOptions,
-    LiveTranscriptionEvents,
-    LiveOptions,
-)
+from typing import Any, Dict, List, Optional
+
+from deepgram import DeepgramClient, DeepgramClientOptions, LiveOptions, LiveTranscriptionEvents
 
 logger = logging.getLogger(__name__)
 
@@ -49,19 +45,15 @@ class DeepgramSTTService:
             # Model configuration
             model="nova-2-phonecall",  # Optimized for phone audio
             language="en",
-
             # Formatting
             smart_format=True,  # Auto-capitalize, punctuate, format numbers
-
             # Audio configuration (Twilio uses mulaw encoding)
             encoding="mulaw",
             sample_rate=8000,  # Phone quality
             channels=1,
-
             # Real-time features
             interim_results=True,  # CRITICAL: enables barge-in detection
             no_delay=True,  # Minimize latency
-
             # End-of-speech detection
             endpointing=300,  # ms of silence to detect end of utterance
             utterance_end_ms=1000,  # ms to finalize utterance
@@ -86,9 +78,7 @@ class DeepgramSTTService:
         """
         try:
             # Create Deepgram client
-            config = DeepgramClientOptions(
-                options={"keepalive": "true"}
-            )
+            config = DeepgramClientOptions(options={"keepalive": "true"})
             self.client = DeepgramClient(self.api_key, config)
 
             # Create live transcription connection
@@ -259,33 +249,39 @@ class DeepgramSTTService:
                 logger.info(f"Deepgram STT: [Speech Final] {utterance}")
 
                 # Add to queue for processing
-                await self.transcript_queue.put({
-                    "type": "final",
-                    "text": utterance,
-                    "is_final": True,
-                    "speech_final": True,
-                })
+                await self.transcript_queue.put(
+                    {
+                        "type": "final",
+                        "text": utterance,
+                        "is_final": True,
+                        "speech_final": True,
+                    }
+                )
             else:
                 logger.debug(f"Deepgram STT: [Is Final] {transcript}")
 
                 # Add to queue but not speech final
-                await self.transcript_queue.put({
-                    "type": "final",
-                    "text": transcript,
-                    "is_final": True,
-                    "speech_final": False,
-                })
+                await self.transcript_queue.put(
+                    {
+                        "type": "final",
+                        "text": transcript,
+                        "is_final": True,
+                        "speech_final": False,
+                    }
+                )
         else:
             # Interim results - used for barge-in detection
             logger.debug(f"Deepgram STT: [Interim Result] {transcript}")
 
             # Add to queue for barge-in detection
-            await self.transcript_queue.put({
-                "type": "interim",
-                "text": transcript,
-                "is_final": False,
-                "speech_final": False,
-            })
+            await self.transcript_queue.put(
+                {
+                    "type": "interim",
+                    "text": transcript,
+                    "is_final": False,
+                    "speech_final": False,
+                }
+            )
 
     async def _on_utterance_end(self, *args, **kwargs) -> None:
         """
@@ -303,12 +299,14 @@ class DeepgramSTTService:
             logger.info(f"Deepgram STT: [Speech Final via UtteranceEnd] {utterance}")
 
             # Add to queue
-            await self.transcript_queue.put({
-                "type": "final",
-                "text": utterance,
-                "is_final": True,
-                "speech_final": True,
-            })
+            await self.transcript_queue.put(
+                {
+                    "type": "final",
+                    "text": utterance,
+                    "is_final": True,
+                    "speech_final": True,
+                }
+            )
 
     async def _on_close(self, *args, **kwargs) -> None:
         """Handle connection close event."""

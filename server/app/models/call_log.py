@@ -1,10 +1,12 @@
 """Call log model."""
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, JSON, Boolean
-from sqlalchemy.orm import relationship
 import enum
 
 from app.models.base import Base, TimestampMixin
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
 
 
 class CallDirection(str, enum.Enum):

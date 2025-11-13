@@ -9,7 +9,7 @@ standard Chat Completions API.
 import asyncio
 import json
 import logging
-from typing import Optional, Dict, Any, List, Callable, AsyncGenerator
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional
 
 from openai import AsyncOpenAI
 
@@ -130,7 +130,7 @@ class OpenAIService:
                 "name": name,
                 "description": description,
                 "parameters": parameters,
-            }
+            },
         }
         self.tool_schemas.append(schema)
 
@@ -143,10 +143,12 @@ class OpenAIService:
         Args:
             content: User's message text
         """
-        self.messages.append({
-            "role": "user",
-            "content": content,
-        })
+        self.messages.append(
+            {
+                "role": "user",
+                "content": content,
+            }
+        )
         logger.debug(f"User message added: {content[:50]}...")
 
     def add_assistant_message(self, content: str) -> None:
@@ -156,10 +158,12 @@ class OpenAIService:
         Args:
             content: Assistant's message text
         """
-        self.messages.append({
-            "role": "assistant",
-            "content": content,
-        })
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": content,
+            }
+        )
         logger.debug(f"Assistant message added: {content[:50]}...")
 
     def add_tool_call_message(
@@ -176,18 +180,22 @@ class OpenAIService:
             function_name: Name of function being called
             function_arguments: JSON string of arguments
         """
-        self.messages.append({
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [{
-                "id": tool_call_id,
-                "type": "function",
-                "function": {
-                    "name": function_name,
-                    "arguments": function_arguments,
-                }
-            }]
-        })
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": function_name,
+                            "arguments": function_arguments,
+                        },
+                    }
+                ],
+            }
+        )
         logger.debug(f"Tool call message added: {function_name}")
 
     def add_tool_result_message(
@@ -202,11 +210,13 @@ class OpenAIService:
             tool_call_id: ID of the tool call this result is for
             result: JSON string of tool execution result
         """
-        self.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": result,
-        })
+        self.messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": result,
+            }
+        )
         logger.debug(f"Tool result added for call_id: {tool_call_id}")
 
     async def generate_response(
@@ -283,11 +293,13 @@ class OpenAIService:
                     for tc_delta in delta.tool_calls:
                         # Initialize tool call accumulator if needed
                         if tc_delta.index >= len(tool_calls_accumulator):
-                            tool_calls_accumulator.append({
-                                "id": tc_delta.id or "",
-                                "name": "",
-                                "arguments": "",
-                            })
+                            tool_calls_accumulator.append(
+                                {
+                                    "id": tc_delta.id or "",
+                                    "name": "",
+                                    "arguments": "",
+                                }
+                            )
 
                         # Accumulate tool call data
                         if tc_delta.id:
@@ -295,12 +307,14 @@ class OpenAIService:
                         if tc_delta.function and tc_delta.function.name:
                             tool_calls_accumulator[tc_delta.index]["name"] = tc_delta.function.name
                         if tc_delta.function and tc_delta.function.arguments:
-                            tool_calls_accumulator[tc_delta.index]["arguments"] += tc_delta.function.arguments
+                            tool_calls_accumulator[tc_delta.index][
+                                "arguments"
+                            ] += tc_delta.function.arguments
 
                 # Handle finish reason
                 if finish_reason:
                     # Track usage if available
-                    if hasattr(chunk, 'usage') and chunk.usage:
+                    if hasattr(chunk, "usage") and chunk.usage:
                         self.total_prompt_tokens += chunk.usage.prompt_tokens
                         self.total_completion_tokens += chunk.usage.completion_tokens
 
@@ -348,10 +362,12 @@ class OpenAIService:
                         # Check depth limit before recursive call
                         self._current_tool_depth += 1
                         if self._current_tool_depth > self.max_tool_call_depth:
-                            logger.error(f"Max tool call depth ({self.max_tool_call_depth}) exceeded")
+                            logger.error(
+                                f"Max tool call depth ({self.max_tool_call_depth}) exceeded"
+                            )
                             yield {
                                 "type": "error",
-                                "message": f"Maximum tool execution depth ({self.max_tool_call_depth}) exceeded. Possible infinite loop."
+                                "message": f"Maximum tool execution depth ({self.max_tool_call_depth}) exceeded. Possible infinite loop.",
                             }
                             self._current_tool_depth -= 1
                             return
@@ -375,7 +391,7 @@ class OpenAIService:
                             "usage": {
                                 "prompt_tokens": self.total_prompt_tokens,
                                 "completion_tokens": self.total_completion_tokens,
-                            }
+                            },
                         }
                         return
 
@@ -391,7 +407,7 @@ class OpenAIService:
                             "usage": {
                                 "prompt_tokens": self.total_prompt_tokens,
                                 "completion_tokens": self.total_completion_tokens,
-                            }
+                            },
                         }
                         return
 

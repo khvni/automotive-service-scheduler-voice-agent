@@ -1,6 +1,7 @@
 """VIN decoding tools using NHTSA API."""
 
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import httpx
 from app.config import settings
 
@@ -54,9 +55,7 @@ async def decode_vin(vin: str) -> Optional[Dict[str, Any]]:
         return vehicle_info
 
 
-async def suggest_service_for_vehicle(
-    year: int, mileage: Optional[int] = None
-) -> list[str]:
+async def suggest_service_for_vehicle(year: int, mileage: Optional[int] = None) -> list[str]:
     """
     Suggest maintenance services based on vehicle age and mileage.
 

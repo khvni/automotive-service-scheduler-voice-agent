@@ -1,10 +1,12 @@
 """Appointment model."""
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Boolean, Text, Numeric, Index
-from sqlalchemy.orm import relationship
 import enum
 
 from app.models.base import Base, TimestampMixin
+from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy.orm import relationship
 
 
 class AppointmentStatus(str, enum.Enum):
@@ -53,9 +55,9 @@ class Appointment(Base, TimestampMixin):
     # HIGH FIX: Add composite indexes for optimized queries
     __table_args__ = (
         # HIGH FIX: Index for querying appointments by status and scheduled time
-        Index('ix_appointments_status_scheduled', 'status', 'scheduled_at'),
+        Index("ix_appointments_status_scheduled", "status", "scheduled_at"),
         # HIGH FIX: Index for querying customer appointments by scheduled time
-        Index('ix_appointments_customer_scheduled', 'customer_id', 'scheduled_at'),
+        Index("ix_appointments_customer_scheduled", "customer_id", "scheduled_at"),
     )
 
     # Primary Identity

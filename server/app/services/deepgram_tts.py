@@ -9,15 +9,13 @@ import asyncio
 import logging
 import time
 from typing import Optional
-from deepgram import (
-    AsyncDeepgramClient,
-    DeepgramClientOptions,
-)
+
+from deepgram import AsyncDeepgramClient, DeepgramClientOptions
 from deepgram.core.events import EventType
 from deepgram.extensions.types.sockets import (
+    SpeakV1ControlMessage,
     SpeakV1SocketClientResponse,
     SpeakV1TextMessage,
-    SpeakV1ControlMessage,
 )
 
 from .tts_interface import TTSInterface
@@ -91,9 +89,7 @@ class DeepgramTTSService(TTSInterface):
         """
         try:
             # Create async Deepgram client
-            config = DeepgramClientOptions(
-                options={"keepalive": "true"}
-            )
+            config = DeepgramClientOptions(options={"keepalive": "true"})
             self.client = AsyncDeepgramClient(self.api_key, config)
 
             # Create speak connection with Twilio-compatible settings

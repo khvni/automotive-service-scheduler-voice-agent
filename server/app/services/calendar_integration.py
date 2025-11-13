@@ -8,13 +8,12 @@ ensuring appointments are created in both the database and calendar.
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from typing import Any, Dict, List, Optional
 
 from app.models import Appointment, Customer, Vehicle
 from app.services.calendar_service import CalendarService
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ async def book_appointment_with_calendar(
     service_type: str,
     start_time: datetime,
     duration_minutes: int = 60,
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Book appointment in both Google Calendar and CRM database.
@@ -66,28 +65,18 @@ async def book_appointment_with_calendar(
     """
     try:
         # Fetch customer details
-        customer_result = await db.execute(
-            select(Customer).where(Customer.id == customer_id)
-        )
+        customer_result = await db.execute(select(Customer).where(Customer.id == customer_id))
         customer = customer_result.scalar_one_or_none()
 
         if not customer:
-            return {
-                'success': False,
-                'message': f'Customer with ID {customer_id} not found'
-            }
+            return {"success": False, "message": f"Customer with ID {customer_id} not found"}
 
         # Fetch vehicle details
-        vehicle_result = await db.execute(
-            select(Vehicle).where(Vehicle.id == vehicle_id)
-        )
+        vehicle_result = await db.execute(select(Vehicle).where(Vehicle.id == vehicle_id))
         vehicle = vehicle_result.scalar_one_or_none()
 
         if not vehicle:
-            return {
-                'success': False,
-                'message': f'Vehicle with ID {vehicle_id} not found'
-            }
+            return {"success": False, "message": f"Vehicle with ID {vehicle_id} not found"}
 
         customer_name = f"{customer.first_name} {customer.last_name}"
         vehicle_info = f"{vehicle.year} {vehicle.make} {vehicle.model}"
@@ -113,14 +102,14 @@ async def book_appointment_with_calendar(
             start_time=start_time,
             end_time=end_time,
             description=event_description,
-            attendees=[customer.email] if customer.email else None
+            attendees=[customer.email] if customer.email else None,
         )
 
-        if not calendar_result['success']:
+        if not calendar_result["success"]:
             logger.error(f"Failed to create calendar event: {calendar_result['message']}")
             return {
-                'success': False,
-                'message': f"Failed to create calendar event: {calendar_result['message']}"
+                "success": False,
+                "message": f"Failed to create calendar event: {calendar_result['message']}",
             }
 
         # Create database appointment
@@ -132,37 +121,36 @@ async def book_appointment_with_calendar(
             service_type=service_type,
             scheduled_at=start_time,
             duration_minutes=duration_minutes,
-            status='scheduled',
-            calendar_event_id=calendar_result['event_id'],
-            notes=notes
+            status="scheduled",
+            calendar_event_id=calendar_result["event_id"],
+            notes=notes,
         )
 
         db.add(appointment)
         await db.commit()
         await db.refresh(appointment)
 
-        logger.info(f"Appointment booked: {appointment_id} with calendar event {calendar_result['event_id']}")
+        logger.info(
+            f"Appointment booked: {appointment_id} with calendar event {calendar_result['event_id']}"
+        )
 
         return {
-            'success': True,
-            'appointment_id': str(appointment_id),
-            'calendar_event_id': calendar_result['event_id'],
-            'calendar_link': calendar_result['calendar_link'],
-            'customer_name': customer_name,
-            'vehicle_info': vehicle_info,
-            'start_time': start_time.isoformat(),
-            'end_time': end_time.isoformat(),
-            'service_type': service_type,
-            'message': f"Appointment for {service_type} booked successfully"
+            "success": True,
+            "appointment_id": str(appointment_id),
+            "calendar_event_id": calendar_result["event_id"],
+            "calendar_link": calendar_result["calendar_link"],
+            "customer_name": customer_name,
+            "vehicle_info": vehicle_info,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "service_type": service_type,
+            "message": f"Appointment for {service_type} booked successfully",
         }
 
     except Exception as e:
         logger.error(f"Error booking appointment with calendar: {e}", exc_info=True)
         await db.rollback()
-        return {
-            'success': False,
-            'message': f"Failed to book appointment: {str(e)}"
-        }
+        return {"success": False, "message": f"Failed to book appointment: {str(e)}"}
 
 
 async def reschedule_appointment_with_calendar(
@@ -170,7 +158,7 @@ async def reschedule_appointment_with_calendar(
     calendar: CalendarService,
     appointment_id: str,
     new_start_time: datetime,
-    new_duration_minutes: Optional[int] = None
+    new_duration_minutes: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Reschedule appointment in both calendar and database.
@@ -196,10 +184,7 @@ async def reschedule_appointment_with_calendar(
         appointment = appointment_result.scalar_one_or_none()
 
         if not appointment:
-            return {
-                'success': False,
-                'message': f'Appointment {appointment_id} not found'
-            }
+            return {"success": False, "message": f"Appointment {appointment_id} not found"}
 
         # Determine duration
         duration = new_duration_minutes if new_duration_minutes else appointment.duration_minutes
@@ -210,14 +195,14 @@ async def reschedule_appointment_with_calendar(
             calendar_result = await calendar.update_calendar_event(
                 event_id=appointment.calendar_event_id,
                 start_time=new_start_time,
-                end_time=new_end_time
+                end_time=new_end_time,
             )
 
-            if not calendar_result['success']:
+            if not calendar_result["success"]:
                 logger.error(f"Failed to update calendar event: {calendar_result['message']}")
                 return {
-                    'success': False,
-                    'message': f"Failed to update calendar: {calendar_result['message']}"
+                    "success": False,
+                    "message": f"Failed to update calendar: {calendar_result['message']}",
                 }
 
         # Update database appointment
@@ -231,26 +216,21 @@ async def reschedule_appointment_with_calendar(
         logger.info(f"Appointment rescheduled: {appointment_id} to {new_start_time}")
 
         return {
-            'success': True,
-            'appointment_id': appointment_id,
-            'new_start_time': new_start_time.isoformat(),
-            'new_end_time': new_end_time.isoformat(),
-            'message': 'Appointment rescheduled successfully'
+            "success": True,
+            "appointment_id": appointment_id,
+            "new_start_time": new_start_time.isoformat(),
+            "new_end_time": new_end_time.isoformat(),
+            "message": "Appointment rescheduled successfully",
         }
 
     except Exception as e:
         logger.error(f"Error rescheduling appointment: {e}", exc_info=True)
         await db.rollback()
-        return {
-            'success': False,
-            'message': f"Failed to reschedule appointment: {str(e)}"
-        }
+        return {"success": False, "message": f"Failed to reschedule appointment: {str(e)}"}
 
 
 async def cancel_appointment_with_calendar(
-    db: AsyncSession,
-    calendar: CalendarService,
-    appointment_id: str
+    db: AsyncSession, calendar: CalendarService, appointment_id: str
 ) -> Dict[str, Any]:
     """
     Cancel appointment in both calendar and database.
@@ -274,10 +254,7 @@ async def cancel_appointment_with_calendar(
         appointment = appointment_result.scalar_one_or_none()
 
         if not appointment:
-            return {
-                'success': False,
-                'message': f'Appointment {appointment_id} not found'
-            }
+            return {"success": False, "message": f"Appointment {appointment_id} not found"}
 
         # Cancel calendar event if exists
         if appointment.calendar_event_id:
@@ -285,30 +262,27 @@ async def cancel_appointment_with_calendar(
                 event_id=appointment.calendar_event_id
             )
 
-            if not calendar_result['success']:
+            if not calendar_result["success"]:
                 logger.warning(f"Failed to cancel calendar event: {calendar_result['message']}")
                 # Continue with database update even if calendar fails
 
         # Update database appointment status
-        appointment.status = 'cancelled'
+        appointment.status = "cancelled"
         await db.commit()
         await db.refresh(appointment)
 
         logger.info(f"Appointment cancelled: {appointment_id}")
 
         return {
-            'success': True,
-            'appointment_id': appointment_id,
-            'message': 'Appointment cancelled successfully'
+            "success": True,
+            "appointment_id": appointment_id,
+            "message": "Appointment cancelled successfully",
         }
 
     except Exception as e:
         logger.error(f"Error cancelling appointment: {e}", exc_info=True)
         await db.rollback()
-        return {
-            'success': False,
-            'message': f"Failed to cancel appointment: {str(e)}"
-        }
+        return {"success": False, "message": f"Failed to cancel appointment: {str(e)}"}
 
 
 async def get_available_slots_for_date(
@@ -316,7 +290,7 @@ async def get_available_slots_for_date(
     date: datetime,
     slot_duration_minutes: int = 30,
     start_hour: int = 9,
-    end_hour: int = 17
+    end_hour: int = 17,
 ) -> Dict[str, Any]:
     """
     Get available time slots for a specific date.
@@ -356,18 +330,16 @@ async def get_available_slots_for_date(
 
         # Get free slots
         free_slots = await calendar.get_free_availability(
-            start_time=start_time,
-            end_time=end_time,
-            duration_minutes=slot_duration_minutes
+            start_time=start_time, end_time=end_time, duration_minutes=slot_duration_minutes
         )
 
         # Format slots for response
         formatted_slots = [
             {
-                'start': slot['start'].isoformat(),
-                'end': slot['end'].isoformat(),
-                'start_formatted': slot['start'].strftime('%I:%M %p'),
-                'end_formatted': slot['end'].strftime('%I:%M %p')
+                "start": slot["start"].isoformat(),
+                "end": slot["end"].isoformat(),
+                "start_formatted": slot["start"].strftime("%I:%M %p"),
+                "end_formatted": slot["end"].strftime("%I:%M %p"),
             }
             for slot in free_slots
         ]
@@ -375,28 +347,26 @@ async def get_available_slots_for_date(
         logger.info(f"Found {len(free_slots)} available slots for {date.date()}")
 
         return {
-            'success': True,
-            'date': date.date().isoformat(),
-            'available_slots': formatted_slots,
-            'count': len(formatted_slots),
-            'message': f"Found {len(formatted_slots)} available time slots"
+            "success": True,
+            "date": date.date().isoformat(),
+            "available_slots": formatted_slots,
+            "count": len(formatted_slots),
+            "message": f"Found {len(formatted_slots)} available time slots",
         }
 
     except Exception as e:
         logger.error(f"Error getting available slots: {e}", exc_info=True)
         return {
-            'success': False,
-            'date': date.date().isoformat(),
-            'available_slots': [],
-            'count': 0,
-            'message': f"Failed to get availability: {str(e)}"
+            "success": False,
+            "date": date.date().isoformat(),
+            "available_slots": [],
+            "count": 0,
+            "message": f"Failed to get availability: {str(e)}",
         }
 
 
 async def get_customer_appointments(
-    db: AsyncSession,
-    customer_id: int,
-    include_past: bool = False
+    db: AsyncSession, customer_id: int, include_past: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Get all appointments for a customer.
@@ -425,13 +395,13 @@ async def get_customer_appointments(
 
         return [
             {
-                'id': str(appointment.id),
-                'service_type': appointment.service_type,
-                'scheduled_at': appointment.scheduled_at.isoformat(),
-                'duration_minutes': appointment.duration_minutes,
-                'status': appointment.status,
-                'calendar_event_id': appointment.calendar_event_id,
-                'notes': appointment.notes
+                "id": str(appointment.id),
+                "service_type": appointment.service_type,
+                "scheduled_at": appointment.scheduled_at.isoformat(),
+                "duration_minutes": appointment.duration_minutes,
+                "status": appointment.status,
+                "calendar_event_id": appointment.calendar_event_id,
+                "notes": appointment.notes,
             }
             for appointment in appointments
         ]

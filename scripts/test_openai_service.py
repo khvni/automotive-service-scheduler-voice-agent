@@ -13,8 +13,8 @@ This script tests the core functionality of the OpenAI service including:
 """
 
 import asyncio
-import sys
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -22,9 +22,9 @@ from pathlib import Path
 server_dir = Path(__file__).parent.parent / "server"
 sys.path.insert(0, str(server_dir))
 
-from app.services.openai_service import OpenAIService
-from app.services.system_prompts import build_system_prompt, INBOUND_NEW_CUSTOMER_PROMPT
 from app.config import settings
+from app.services.openai_service import OpenAIService
+from app.services.system_prompts import INBOUND_NEW_CUSTOMER_PROMPT, build_system_prompt
 
 
 # Mock tool handlers for testing
@@ -46,8 +46,8 @@ async def mock_lookup_customer(phone_number: str):
                     "make": "Honda",
                     "model": "Civic",
                 }
-            ]
-        }
+            ],
+        },
     }
 
 
@@ -60,16 +60,12 @@ async def mock_get_available_slots(date: str, service_type: str = "general_servi
             {"time": "09:00", "available": True},
             {"time": "11:00", "available": True},
             {"time": "14:00", "available": True},
-        ]
+        ],
     }
 
 
 async def mock_book_appointment(
-    customer_id: int,
-    vehicle_id: int,
-    service_type: str,
-    start_time: str,
-    notes: str = ""
+    customer_id: int, vehicle_id: int, service_type: str, start_time: str, notes: str = ""
 ):
     """Mock appointment booking."""
     await asyncio.sleep(0.1)  # Simulate booking
@@ -131,8 +127,8 @@ async def test_system_prompt(service: OpenAIService):
                 "last_service": "Oil change",
                 "last_service_date": "2024-12-01",
                 "vehicles": "2020 Honda Civic",
-                "upcoming_appointments": "None"
-            }
+                "upcoming_appointments": "None",
+            },
         )
         service.set_system_prompt(custom_prompt)
         print("✓ Dynamic system prompt built and set")
@@ -152,12 +148,10 @@ async def test_tool_registration(service: OpenAIService):
             description="Look up customer by phone",
             parameters={
                 "type": "object",
-                "properties": {
-                    "phone_number": {"type": "string"}
-                },
-                "required": ["phone_number"]
+                "properties": {"phone_number": {"type": "string"}},
+                "required": ["phone_number"],
             },
-            handler=mock_lookup_customer
+            handler=mock_lookup_customer,
         )
 
         service.register_tool(
@@ -165,13 +159,10 @@ async def test_tool_registration(service: OpenAIService):
             description="Get available time slots",
             parameters={
                 "type": "object",
-                "properties": {
-                    "date": {"type": "string"},
-                    "service_type": {"type": "string"}
-                },
-                "required": ["date"]
+                "properties": {"date": {"type": "string"}, "service_type": {"type": "string"}},
+                "required": ["date"],
             },
-            handler=mock_get_available_slots
+            handler=mock_get_available_slots,
         )
 
         service.register_tool(
@@ -184,11 +175,11 @@ async def test_tool_registration(service: OpenAIService):
                     "vehicle_id": {"type": "integer"},
                     "service_type": {"type": "string"},
                     "start_time": {"type": "string"},
-                    "notes": {"type": "string"}
+                    "notes": {"type": "string"},
                 },
-                "required": ["customer_id", "vehicle_id", "service_type", "start_time"]
+                "required": ["customer_id", "vehicle_id", "service_type", "start_time"],
             },
-            handler=mock_book_appointment
+            handler=mock_book_appointment,
         )
 
         print(f"✓ Registered {len(service.tool_schemas)} tools")
@@ -206,7 +197,9 @@ async def test_simple_conversation(service: OpenAIService):
     try:
         # Clear history and set simple prompt
         service.clear_history(keep_system=False)
-        service.set_system_prompt("You are a helpful assistant. Keep responses brief (1-2 sentences).")
+        service.set_system_prompt(
+            "You are a helpful assistant. Keep responses brief (1-2 sentences)."
+        )
 
         # Add user message
         service.add_user_message("Say hello in a friendly way.")
@@ -273,7 +266,9 @@ async def test_tool_calling(service: OpenAIService):
                 total_time = time.time() - start_time
                 print(f"\n\n✓ Tool calling complete")
                 print(f"  Total time: {total_time:.3f}s")
-                print(f"  Tools called: {', '.join(tool_calls_made) if tool_calls_made else 'None'}")
+                print(
+                    f"  Tools called: {', '.join(tool_calls_made) if tool_calls_made else 'None'}"
+                )
                 print(f"  Tokens used: {event['usage']}")
 
             elif event["type"] == "error":

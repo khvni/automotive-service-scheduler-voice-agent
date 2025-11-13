@@ -1,10 +1,10 @@
 """Vehicle model."""
 
 import re
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Boolean, Text
-from sqlalchemy.orm import relationship, validates
 
 from app.models.base import Base, TimestampMixin
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship, validates
 
 
 class Vehicle(Base, TimestampMixin):
@@ -55,9 +55,11 @@ class Vehicle(Base, TimestampMixin):
     # Relationships
     customer = relationship("Customer", back_populates="vehicles")
     appointments = relationship("Appointment", back_populates="vehicle")
-    service_history = relationship("ServiceHistory", back_populates="vehicle", cascade="all, delete-orphan")
+    service_history = relationship(
+        "ServiceHistory", back_populates="vehicle", cascade="all, delete-orphan"
+    )
 
-    @validates('vin')
+    @validates("vin")
     def validate_vin(self, key, value):
         """Validate VIN format.
 
@@ -75,9 +77,11 @@ class Vehicle(Base, TimestampMixin):
             raise ValueError(f"VIN must be exactly 17 characters, got {len(value)}")
 
         # HIGH FIX: VIN regex - alphanumeric excluding I, O, Q (easily confused with 1 and 0)
-        vin_pattern = r'^[A-HJ-NPR-Z0-9]{17}$'
+        vin_pattern = r"^[A-HJ-NPR-Z0-9]{17}$"
         if not re.match(vin_pattern, value):
-            raise ValueError(f"Invalid VIN format: {value}. VIN must contain only letters (except I, O, Q) and numbers")
+            raise ValueError(
+                f"Invalid VIN format: {value}. VIN must contain only letters (except I, O, Q) and numbers"
+            )
 
         return value
 

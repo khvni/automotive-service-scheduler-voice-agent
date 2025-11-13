@@ -5,9 +5,9 @@ This interface enables swapping between different TTS providers
 (Deepgram, ElevenLabs, Cartesia, etc.) with consistent API.
 """
 
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional
-import asyncio
 
 
 class TTSInterface(ABC):

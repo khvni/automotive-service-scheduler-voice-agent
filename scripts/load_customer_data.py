@@ -10,19 +10,18 @@ populates the database with realistic customer data.
 import asyncio
 import sys
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 # Add server directory to path
 sys.path.append(str(Path(__file__).parent.parent / "server"))
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from datetime import datetime, timedelta
 import random
+from datetime import datetime, timedelta
 
 from app.config import settings
 from app.models import Customer, Vehicle
 from app.models.base import Base
-
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Sample data based on CustomerPersonas dataset schema
 SAMPLE_PERSONAS = [
@@ -177,9 +176,7 @@ async def load_customer_personas():
     print()
 
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    async_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     try:
         async with async_session_maker() as db:
@@ -193,8 +190,7 @@ async def load_customer_personas():
                     first_name=persona["first_name"],
                     last_name=persona["last_name"],
                     email=persona["email"],
-                    last_service_date=datetime.now()
-                    - timedelta(days=random.randint(30, 180)),
+                    last_service_date=datetime.now() - timedelta(days=random.randint(30, 180)),
                     preferred_contact_method=random.choice(["phone", "email", "sms"]),
                     notes=f"Customer loaded from persona dataset. Preferred contact: {persona.get('preferred_time', 'anytime')}",
                 )

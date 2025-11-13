@@ -10,13 +10,13 @@ from pathlib import Path
 # Add server directory to path
 sys.path.append(str(Path(__file__).parent.parent / "server"))
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from datetime import datetime, timedelta
 
 from app.config import settings
-from app.models import Customer, Vehicle, Appointment
+from app.models import Appointment, Customer, Vehicle
 from app.models.appointment import AppointmentStatus, ServiceType
 from app.models.base import Base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 
 async def init_database():
@@ -24,9 +24,7 @@ async def init_database():
     print("Initializing database...")
 
     engine = create_async_engine(settings.DATABASE_URL, echo=True)
-    async_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     # Create tables
     print("Creating tables...")

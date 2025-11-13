@@ -3,14 +3,14 @@ Main FastAPI application for AI Automotive Service Scheduler.
 Handles WebSocket connections for voice streaming and tool orchestration.
 """
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.routes import voice, health, webhooks
-from app.services.database import init_db, close_db
-from app.services.redis_client import init_redis, close_redis
 from app.config import settings
+from app.routes import health, voice, webhooks
+from app.services.database import close_db, init_db
+from app.services.redis_client import close_redis, init_redis
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 
 @asynccontextmanager

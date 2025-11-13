@@ -1,9 +1,8 @@
 """Service history model."""
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Numeric, JSON
-from sqlalchemy.orm import relationship
-
 from app.models.base import Base, TimestampMixin
+from sqlalchemy import JSON, Column, Date, ForeignKey, Integer, Numeric, String
+from sqlalchemy.orm import relationship
 
 
 class ServiceHistory(Base, TimestampMixin):

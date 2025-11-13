@@ -5,8 +5,7 @@ This module defines the function schemas that the LLM can call during conversati
 Each tool follows the OpenAI function calling specification format.
 """
 
-from typing import List, Dict, Any, Optional
-
+from typing import Any, Dict, List, Optional
 
 # Tool schemas for OpenAI function calling
 TOOL_SCHEMAS: List[Dict[str, Any]] = [
@@ -20,12 +19,12 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "phone_number": {
                         "type": "string",
-                        "description": "Customer's phone number (10 digits, formats accepted: 555-123-4567, (555) 123-4567, or 5551234567)"
+                        "description": "Customer's phone number (10 digits, formats accepted: 555-123-4567, (555) 123-4567, or 5551234567)",
                     }
                 },
-                "required": ["phone_number"]
-            }
-        }
+                "required": ["phone_number"],
+            },
+        },
     },
     {
         "type": "function",
@@ -37,17 +36,23 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "date": {
                         "type": "string",
-                        "description": "Date to check availability (format: YYYY-MM-DD, e.g., 2025-01-15)"
+                        "description": "Date to check availability (format: YYYY-MM-DD, e.g., 2025-01-15)",
                     },
                     "service_type": {
                         "type": "string",
                         "description": "Type of service needed (optional, affects duration). Options: oil_change, brake_service, tire_rotation, inspection, general_service",
-                        "enum": ["oil_change", "brake_service", "tire_rotation", "inspection", "general_service"]
-                    }
+                        "enum": [
+                            "oil_change",
+                            "brake_service",
+                            "tire_rotation",
+                            "inspection",
+                            "general_service",
+                        ],
+                    },
                 },
-                "required": ["date"]
-            }
-        }
+                "required": ["date"],
+            },
+        },
     },
     {
         "type": "function",
@@ -59,28 +64,28 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "customer_id": {
                         "type": "integer",
-                        "description": "Customer ID (obtained from lookup_customer result)"
+                        "description": "Customer ID (obtained from lookup_customer result)",
                     },
                     "vehicle_id": {
                         "type": "integer",
-                        "description": "Vehicle ID (obtained from lookup_customer result)"
+                        "description": "Vehicle ID (obtained from lookup_customer result)",
                     },
                     "service_type": {
                         "type": "string",
-                        "description": "Type of service to book (e.g., 'oil_change', 'brake_service', 'inspection')"
+                        "description": "Type of service to book (e.g., 'oil_change', 'brake_service', 'inspection')",
                     },
                     "start_time": {
                         "type": "string",
-                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00')"
+                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00')",
                     },
                     "notes": {
                         "type": "string",
-                        "description": "Any special notes or customer concerns (optional)"
-                    }
+                        "description": "Any special notes or customer concerns (optional)",
+                    },
                 },
-                "required": ["customer_id", "vehicle_id", "service_type", "start_time"]
-            }
-        }
+                "required": ["customer_id", "vehicle_id", "service_type", "start_time"],
+            },
+        },
     },
     {
         "type": "function",
@@ -92,12 +97,12 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "customer_id": {
                         "type": "integer",
-                        "description": "Customer ID (obtained from lookup_customer)"
+                        "description": "Customer ID (obtained from lookup_customer)",
                     }
                 },
-                "required": ["customer_id"]
-            }
-        }
+                "required": ["customer_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -109,17 +114,23 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "appointment_id": {
                         "type": "integer",
-                        "description": "Appointment ID to cancel (obtained from get_upcoming_appointments)"
+                        "description": "Appointment ID to cancel (obtained from get_upcoming_appointments)",
                     },
                     "reason": {
                         "type": "string",
                         "description": "Reason for cancellation (optional but helpful for tracking)",
-                        "enum": ["schedule_conflict", "got_service_elsewhere", "vehicle_sold", "issue_resolved", "other"]
-                    }
+                        "enum": [
+                            "schedule_conflict",
+                            "got_service_elsewhere",
+                            "vehicle_sold",
+                            "issue_resolved",
+                            "other",
+                        ],
+                    },
                 },
-                "required": ["appointment_id"]
-            }
-        }
+                "required": ["appointment_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -131,16 +142,16 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "appointment_id": {
                         "type": "integer",
-                        "description": "Appointment ID to reschedule (obtained from get_upcoming_appointments)"
+                        "description": "Appointment ID to reschedule (obtained from get_upcoming_appointments)",
                     },
                     "new_start_time": {
                         "type": "string",
-                        "description": "New appointment start time in ISO format (e.g., '2025-01-16T14:00:00')"
-                    }
+                        "description": "New appointment start time in ISO format (e.g., '2025-01-16T14:00:00')",
+                    },
                 },
-                "required": ["appointment_id", "new_start_time"]
-            }
-        }
+                "required": ["appointment_id", "new_start_time"],
+            },
+        },
     },
     {
         "type": "function",
@@ -152,13 +163,13 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                 "properties": {
                     "vin": {
                         "type": "string",
-                        "description": "17-character Vehicle Identification Number (VIN)"
+                        "description": "17-character Vehicle Identification Number (VIN)",
                     }
                 },
-                "required": ["vin"]
-            }
-        }
-    }
+                "required": ["vin"],
+            },
+        },
+    },
 ]
 
 

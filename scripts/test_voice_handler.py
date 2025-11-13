@@ -9,16 +9,16 @@ Usage:
 """
 
 import asyncio
-import json
 import base64
+import json
 import sys
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "server"))
 
-from fastapi.testclient import TestClient
 from app.main import app
+from fastapi.testclient import TestClient
 
 
 def generate_test_audio():
@@ -29,7 +29,7 @@ def generate_test_audio():
     """
     # Mulaw silence is 0xFF (255)
     silence = bytes([0xFF] * 160)
-    return base64.b64encode(silence).decode('utf-8')
+    return base64.b64encode(silence).decode("utf-8")
 
 
 async def test_websocket_connection():
@@ -42,11 +42,7 @@ async def test_websocket_connection():
         print("✓ WebSocket connected")
 
         # Send 'connected' event
-        websocket.send_json({
-            "event": "connected",
-            "protocol": "Call",
-            "version": "1.0.0"
-        })
+        websocket.send_json({"event": "connected", "protocol": "Call", "version": "1.0.0"})
         print("✓ Sent 'connected' event")
 
         # Send 'start' event
@@ -58,11 +54,9 @@ async def test_websocket_connection():
                 "accountSid": "AC1234567890abcdef",
                 "callSid": "CA1234567890abcdef",
                 "from": "+15551234567",
-                "customParameters": {
-                    "From": "+15551234567"
-                }
+                "customParameters": {"From": "+15551234567"},
             },
-            "streamSid": "MZ1234567890abcdef"
+            "streamSid": "MZ1234567890abcdef",
         }
         websocket.send_json(start_event)
         print("✓ Sent 'start' event")
@@ -76,9 +70,9 @@ async def test_websocket_connection():
                     "track": "inbound",
                     "chunk": str(i),
                     "timestamp": str(i * 20),
-                    "payload": generate_test_audio()
+                    "payload": generate_test_audio(),
                 },
-                "streamSid": "MZ1234567890abcdef"
+                "streamSid": "MZ1234567890abcdef",
             }
             websocket.send_json(media_event)
 
@@ -92,10 +86,7 @@ async def test_websocket_connection():
             "event": "stop",
             "sequenceNumber": "12",
             "streamSid": "MZ1234567890abcdef",
-            "stop": {
-                "accountSid": "AC1234567890abcdef",
-                "callSid": "CA1234567890abcdef"
-            }
+            "stop": {"accountSid": "AC1234567890abcdef", "callSid": "CA1234567890abcdef"},
         }
         websocket.send_json(stop_event)
         print("✓ Sent 'stop' event")

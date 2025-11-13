@@ -11,41 +11,39 @@ using the Faker library. It creates:
 """
 
 import asyncio
-import sys
 import random
-from pathlib import Path
-from datetime import datetime, timedelta, date
+import sys
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 # Add server directory to path
 sys.path.append(str(Path(__file__).parent.parent / "server"))
 
-from faker import Faker
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
 from app.config import settings
-from app.models import Customer, Vehicle, Appointment, ServiceHistory
+from app.models import Appointment, Customer, ServiceHistory, Vehicle
 from app.models.appointment import AppointmentStatus, ServiceType
 from app.models.base import Base
-
+from faker import Faker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Initialize Faker
-fake = Faker('en_US')
+fake = Faker("en_US")
 Faker.seed(42)  # For reproducibility
 random.seed(42)
 
 # Constants for realistic data generation
 MAKES_MODELS = {
-    'Toyota': ['Camry', 'Corolla', 'RAV4', 'Highlander', 'Tacoma', '4Runner', 'Tundra', 'Prius'],
-    'Honda': ['Accord', 'Civic', 'CR-V', 'Pilot', 'Odyssey', 'Ridgeline', 'HR-V'],
-    'Ford': ['F-150', 'Escape', 'Explorer', 'Mustang', 'Edge', 'Bronco', 'Ranger'],
-    'Chevrolet': ['Silverado', 'Equinox', 'Malibu', 'Tahoe', 'Traverse', 'Colorado'],
-    'BMW': ['3 Series', '5 Series', 'X3', 'X5', 'X7', '7 Series'],
-    'Mercedes-Benz': ['C-Class', 'E-Class', 'GLC', 'GLE', 'GLS', 'S-Class'],
-    'Nissan': ['Altima', 'Sentra', 'Rogue', 'Pathfinder', 'Frontier', 'Murano'],
-    'Hyundai': ['Elantra', 'Sonata', 'Tucson', 'Santa Fe', 'Kona', 'Palisade'],
-    'Jeep': ['Wrangler', 'Cherokee', 'Grand Cherokee', 'Compass', 'Gladiator'],
-    'Subaru': ['Outback', 'Forester', 'Crosstrek', 'Impreza', 'Ascent'],
+    "Toyota": ["Camry", "Corolla", "RAV4", "Highlander", "Tacoma", "4Runner", "Tundra", "Prius"],
+    "Honda": ["Accord", "Civic", "CR-V", "Pilot", "Odyssey", "Ridgeline", "HR-V"],
+    "Ford": ["F-150", "Escape", "Explorer", "Mustang", "Edge", "Bronco", "Ranger"],
+    "Chevrolet": ["Silverado", "Equinox", "Malibu", "Tahoe", "Traverse", "Colorado"],
+    "BMW": ["3 Series", "5 Series", "X3", "X5", "X7", "7 Series"],
+    "Mercedes-Benz": ["C-Class", "E-Class", "GLC", "GLE", "GLS", "S-Class"],
+    "Nissan": ["Altima", "Sentra", "Rogue", "Pathfinder", "Frontier", "Murano"],
+    "Hyundai": ["Elantra", "Sonata", "Tucson", "Santa Fe", "Kona", "Palisade"],
+    "Jeep": ["Wrangler", "Cherokee", "Grand Cherokee", "Compass", "Gladiator"],
+    "Subaru": ["Outback", "Forester", "Crosstrek", "Impreza", "Ascent"],
 }
 
 SERVICE_TYPES = [
@@ -58,20 +56,26 @@ SERVICE_TYPES = [
     ServiceType.GENERAL_MAINTENANCE,
 ]
 
-SERVICE_CATEGORIES = ['maintenance', 'repair', 'inspection', 'recall']
+SERVICE_CATEGORIES = ["maintenance", "repair", "inspection", "recall"]
 
-SERVICE_ADVISORS = ['Mike Johnson', 'Sarah Chen', 'Robert Williams', 'Emily Davis', 'James Martinez']
+SERVICE_ADVISORS = [
+    "Mike Johnson",
+    "Sarah Chen",
+    "Robert Williams",
+    "Emily Davis",
+    "James Martinez",
+]
 
-TECHNICIANS = ['Tom Anderson', 'Lisa Thompson', 'Carlos Rodriguez', 'Amanda White', 'Kevin Brown']
+TECHNICIANS = ["Tom Anderson", "Lisa Thompson", "Carlos Rodriguez", "Amanda White", "Kevin Brown"]
 
-SERVICE_BAYS = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2']
+SERVICE_BAYS = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2"]
 
 
 def generate_vin():
     """Generate a realistic VIN number."""
     # Simple VIN generation (17 characters)
-    chars = 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789'
-    return ''.join(random.choice(chars) for _ in range(17))
+    chars = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
+    return "".join(random.choice(chars) for _ in range(17))
 
 
 def generate_license_plate():
@@ -101,52 +105,46 @@ async def generate_customers(num_customers: int = 10000):
         dob = date.today() - timedelta(days=age * 365 + random.randint(0, 365))
 
         # Customer since date (random between 6 months and 5 years ago)
-        customer_since = fake.date_between(start_date='-5y', end_date='-6M')
+        customer_since = fake.date_between(start_date="-5y", end_date="-6M")
 
         # Last contact date (between customer_since and now)
         last_contact = None
         if random.random() < 0.7:  # 70% have been contacted
-            last_contact = fake.date_time_between(start_date=customer_since, end_date='now')
+            last_contact = fake.date_time_between(start_date=customer_since, end_date="now")
 
         customer = Customer(
             # Contact
             phone_number=fake.phone_number(),
             email=f"{first_name.lower()}.{last_name.lower()}.{random.randint(1, 999)}@{fake.free_email_domain()}",
             preferred_contact_method=random.choices(
-                ['phone', 'email', 'sms'],
-                weights=[0.70, 0.20, 0.10]
+                ["phone", "email", "sms"], weights=[0.70, 0.20, 0.10]
             )[0],
-
             # Personal
             first_name=first_name,
             last_name=last_name,
             date_of_birth=dob,
-
             # Address
             street_address=fake.street_address(),
             city=fake.city(),
             state=fake.state_abbr(),
             zip_code=fake.zipcode(),
-
             # Relationship
             customer_since=customer_since,
             customer_type=random.choices(
-                ['retail', 'fleet', 'referral'],
-                weights=[0.85, 0.05, 0.10]
+                ["retail", "fleet", "referral"], weights=[0.85, 0.05, 0.10]
             )[0],
             referral_source=fake.name() if random.random() < 0.1 else None,
             preferred_service_advisor=random.choice(SERVICE_ADVISORS + [None, None]),
-
             # Preferences
             receive_reminders=random.choice([True, True, True, False]),
             receive_promotions=random.choice([True, True, False]),
-            preferred_appointment_time=random.choice(['morning', 'afternoon', 'evening', None, None]),
-
+            preferred_appointment_time=random.choice(
+                ["morning", "afternoon", "evening", None, None]
+            ),
             # Notes (occasionally)
             notes=fake.sentence() if random.random() < 0.15 else None,
-
             # Timestamps
-            last_contact_date=last_contact
+            last_contact_date=last_contact,
         )
         customers.append(customer)
 
@@ -176,13 +174,9 @@ async def generate_vehicles(customers: list):
             purchase_date = None
             if purchased_from_us and customer.customer_since:
                 # Purchase date between customer_since and 1 year later
-                latest_purchase = min(
-                    customer.customer_since + timedelta(days=365),
-                    date.today()
-                )
+                latest_purchase = min(customer.customer_since + timedelta(days=365), date.today())
                 purchase_date = fake.date_between(
-                    start_date=customer.customer_since,
-                    end_date=latest_purchase
+                    start_date=customer.customer_since, end_date=latest_purchase
                 )
 
             # Calculate mileage based on vehicle age
@@ -196,38 +190,32 @@ async def generate_vehicles(customers: list):
             last_service_mileage = None
             if random.random() < 0.6 and customer.customer_since:
                 last_service_date = fake.date_between(
-                    start_date=customer.customer_since,
-                    end_date=date.today()
+                    start_date=customer.customer_since, end_date=date.today()
                 )
                 last_service_mileage = current_mileage - random.randint(500, 3000)
 
             vehicle = Vehicle(
                 customer_id=customer.id,
-
                 # Identity
                 vin=generate_vin(),
                 license_plate=generate_license_plate(),
-
                 # Details
                 year=year,
                 make=make,
                 model=model,
-                trim=random.choice(['Base', 'LX', 'EX', 'Limited', 'Premium', 'Sport', None]),
+                trim=random.choice(["Base", "LX", "EX", "Limited", "Premium", "Sport", None]),
                 color=fake.color_name(),
-
                 # Ownership
                 purchase_date=purchase_date,
                 purchased_from_us=purchased_from_us,
-
                 # Service
                 current_mileage=current_mileage,
                 last_service_date=last_service_date,
                 last_service_mileage=last_service_mileage,
                 next_service_due_mileage=current_mileage + random.randint(2000, 5000),
-
                 # Status
                 is_primary_vehicle=(idx == 0),  # First vehicle is primary
-                status='active',
+                status="active",
             )
             vehicles.append(vehicle)
             vehicle_count += 1
@@ -271,39 +259,27 @@ async def generate_appointments(customers: list, vehicles: list):
             # Determine appointment timing
             # 70% past, 15% future, 15% cancelled
             status_choice = random.choices(
-                ['past', 'future', 'cancelled'],
-                weights=[0.70, 0.15, 0.15]
+                ["past", "future", "cancelled"], weights=[0.70, 0.15, 0.15]
             )[0]
 
-            if status_choice == 'past':
+            if status_choice == "past":
                 # Past appointment (completed)
                 scheduled_at = fake.date_time_between(
-                    start_date=customer.customer_since or '-2y',
-                    end_date='-1d'
+                    start_date=customer.customer_since or "-2y", end_date="-1d"
                 )
                 status = AppointmentStatus.COMPLETED
                 completed_at = scheduled_at + timedelta(hours=random.randint(1, 4))
-            elif status_choice == 'future':
+            elif status_choice == "future":
                 # Future appointment
-                scheduled_at = fake.date_time_between(
-                    start_date='now',
-                    end_date='+90d'
-                )
-                status = random.choice([
-                    AppointmentStatus.SCHEDULED,
-                    AppointmentStatus.CONFIRMED
-                ])
+                scheduled_at = fake.date_time_between(start_date="now", end_date="+90d")
+                status = random.choice([AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED])
                 completed_at = None
             else:
                 # Cancelled appointment
                 scheduled_at = fake.date_time_between(
-                    start_date=customer.customer_since or '-2y',
-                    end_date='now'
+                    start_date=customer.customer_since or "-2y", end_date="now"
                 )
-                status = random.choice([
-                    AppointmentStatus.CANCELLED,
-                    AppointmentStatus.NO_SHOW
-                ])
+                status = random.choice([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW])
                 completed_at = None
 
             service_type = random.choice(SERVICE_TYPES)
@@ -329,39 +305,45 @@ async def generate_appointments(customers: list, vehicles: list):
                 variance = random.uniform(0.9, 1.2)
                 # HIGH FIX: Use Decimal(str()) pattern to prevent precision loss
                 # Converting float directly to Decimal can introduce rounding errors
-                actual_cost = (Decimal(str(estimated_cost)) * Decimal(str(variance))).quantize(Decimal('0.01'))
+                actual_cost = (Decimal(str(estimated_cost)) * Decimal(str(variance))).quantize(
+                    Decimal("0.01")
+                )
 
             appointment = Appointment(
                 customer_id=customer.id,
                 vehicle_id=vehicle.id,
-
                 # Appointment Details
                 scheduled_at=scheduled_at,
                 duration_minutes=random.choice([30, 60, 90, 120]),
                 service_type=service_type,
                 service_category=service_category,
-
                 # Service Details
                 service_description=f"{service_type.value.replace('_', ' ').title()} for {vehicle.year} {vehicle.make} {vehicle.model}",
                 customer_concerns=fake.sentence() if random.random() < 0.5 else None,
                 recommended_services=fake.sentence() if random.random() < 0.3 else None,
                 estimated_cost=estimated_cost,
                 actual_cost=actual_cost,
-
                 # Status & Workflow
                 status=status,
-                cancellation_reason=fake.sentence() if status == AppointmentStatus.CANCELLED else None,
-                confirmation_sent=random.choice([True, False]) if status != AppointmentStatus.CANCELLED else False,
-                reminder_sent=random.choice([True, False]) if status != AppointmentStatus.CANCELLED else False,
-
+                cancellation_reason=(
+                    fake.sentence() if status == AppointmentStatus.CANCELLED else None
+                ),
+                confirmation_sent=(
+                    random.choice([True, False]) if status != AppointmentStatus.CANCELLED else False
+                ),
+                reminder_sent=(
+                    random.choice([True, False]) if status != AppointmentStatus.CANCELLED else False
+                ),
                 # Assignment
-                assigned_technician=random.choice(TECHNICIANS) if status == AppointmentStatus.COMPLETED else None,
-                service_bay=random.choice(SERVICE_BAYS) if status == AppointmentStatus.COMPLETED else None,
-
+                assigned_technician=(
+                    random.choice(TECHNICIANS) if status == AppointmentStatus.COMPLETED else None
+                ),
+                service_bay=(
+                    random.choice(SERVICE_BAYS) if status == AppointmentStatus.COMPLETED else None
+                ),
                 # Communication
-                booking_method=random.choice(['phone', 'online', 'walk_in', 'ai_voice']),
-                booked_by=random.choice(SERVICE_ADVISORS + ['AI Voice Agent']),
-
+                booking_method=random.choice(["phone", "online", "walk_in", "ai_voice"]),
+                booked_by=random.choice(SERVICE_ADVISORS + ["AI Voice Agent"]),
                 # Timestamps
                 completed_at=completed_at,
             )
@@ -377,7 +359,9 @@ async def generate_service_history(appointments: list):
     print("Generating service history records...")
     history_records = []
 
-    completed_appointments = [apt for apt in appointments if apt.status == AppointmentStatus.COMPLETED]
+    completed_appointments = [
+        apt for apt in appointments if apt.status == AppointmentStatus.COMPLETED
+    ]
 
     for i, appointment in enumerate(completed_appointments):
         if (i + 1) % 1000 == 0:
@@ -386,36 +370,39 @@ async def generate_service_history(appointments: list):
         # Generate services performed
         services_performed = [appointment.service_type.value]
         if random.random() < 0.3:  # 30% chance of additional services
-            additional_services = random.sample([
-                'filter_replacement',
-                'fluid_top_off',
-                'tire_pressure_check',
-                'battery_test',
-                'wiper_replacement'
-            ], k=random.randint(1, 2))
+            additional_services = random.sample(
+                [
+                    "filter_replacement",
+                    "fluid_top_off",
+                    "tire_pressure_check",
+                    "battery_test",
+                    "wiper_replacement",
+                ],
+                k=random.randint(1, 2),
+            )
             services_performed.extend(additional_services)
 
         # Generate parts replaced (if applicable)
         parts_replaced = []
         if appointment.service_type in [ServiceType.OIL_CHANGE, ServiceType.BRAKE_SERVICE]:
             if appointment.service_type == ServiceType.OIL_CHANGE:
-                parts_replaced = ['oil_filter', 'engine_oil']
+                parts_replaced = ["oil_filter", "engine_oil"]
             elif appointment.service_type == ServiceType.BRAKE_SERVICE:
-                parts_replaced = random.sample([
-                    'brake_pads_front',
-                    'brake_pads_rear',
-                    'brake_rotors_front',
-                    'brake_rotors_rear',
-                    'brake_fluid'
-                ], k=random.randint(1, 3))
+                parts_replaced = random.sample(
+                    [
+                        "brake_pads_front",
+                        "brake_pads_rear",
+                        "brake_rotors_front",
+                        "brake_rotors_rear",
+                        "brake_fluid",
+                    ],
+                    k=random.randint(1, 3),
+                )
 
         # Next service recommendation
-        next_service_type = random.choice([
-            'Oil Change',
-            'Tire Rotation',
-            'Brake Inspection',
-            'Multi-Point Inspection'
-        ])
+        next_service_type = random.choice(
+            ["Oil Change", "Tire Rotation", "Brake Inspection", "Multi-Point Inspection"]
+        )
 
         # Next service due in 3-6 months
         next_due_date = appointment.scheduled_at.date() + timedelta(days=random.randint(90, 180))
@@ -448,9 +435,7 @@ async def main():
     # Connect to database
     print("\nConnecting to database...")
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    async_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     # Create tables
     print("Creating tables...")
@@ -521,8 +506,20 @@ async def main():
 
     # Print some statistics
     completed_appts = len([a for a in appointments if a.status == AppointmentStatus.COMPLETED])
-    future_appts = len([a for a in appointments if a.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]])
-    cancelled_appts = len([a for a in appointments if a.status in [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]])
+    future_appts = len(
+        [
+            a
+            for a in appointments
+            if a.status in [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]
+        ]
+    )
+    cancelled_appts = len(
+        [
+            a
+            for a in appointments
+            if a.status in [AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]
+        ]
+    )
 
     print("\nAppointment Statistics:")
     print(f"  Completed:  {completed_appts:,} ({completed_appts/len(appointments)*100:.1f}%)")

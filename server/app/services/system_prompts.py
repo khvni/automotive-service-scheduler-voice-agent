@@ -6,9 +6,8 @@ Prompts are designed to guide Sophie (the AI receptionist) to behave appropriate
 for each scenario.
 """
 
-from typing import Optional, Dict, Any
 from datetime import datetime
-
+from typing import Any, Dict, Optional
 
 # Base prompt with role, persona, and business information
 BASE_SYSTEM_PROMPT = """### Role
@@ -119,12 +118,12 @@ This is a NEW CUSTOMER calling. Their phone number is not in our system.
 """
 
     elif call_type == "inbound_existing" and customer_context:
-        name = customer_context.get('name', 'this customer')
-        customer_since = customer_context.get('customer_since', 'Unknown')
-        last_service = customer_context.get('last_service', 'No previous service')
-        last_service_date = customer_context.get('last_service_date', '')
-        vehicles = customer_context.get('vehicles', 'No vehicles listed')
-        upcoming = customer_context.get('upcoming_appointments', 'None')
+        name = customer_context.get("name", "this customer")
+        customer_since = customer_context.get("customer_since", "Unknown")
+        last_service = customer_context.get("last_service", "No previous service")
+        last_service_date = customer_context.get("last_service_date", "")
+        vehicles = customer_context.get("vehicles", "No vehicles listed")
+        upcoming = customer_context.get("upcoming_appointments", "None")
 
         context = f"""
 ### Current Situation
@@ -151,10 +150,10 @@ This is an EXISTING CUSTOMER: {name}
 """
 
     elif call_type == "outbound_reminder" and appointment_context:
-        customer_name = appointment_context.get('customer_name', 'the customer')
-        service_type = appointment_context.get('service_type', 'service')
-        appointment_time = appointment_context.get('appointment_time', 'your scheduled time')
-        vehicle = appointment_context.get('vehicle', 'your vehicle')
+        customer_name = appointment_context.get("customer_name", "the customer")
+        service_type = appointment_context.get("service_type", "service")
+        appointment_time = appointment_context.get("appointment_time", "your scheduled time")
+        vehicle = appointment_context.get("vehicle", "your vehicle")
 
         context = f"""
 ### Current Situation
@@ -222,20 +221,17 @@ def build_inbound_existing_prompt(customer_info: Dict[str, Any]) -> str:
     """
     customer_context = {
         "name": f"{customer_info.get('first_name', '')} {customer_info.get('last_name', '')}".strip(),
-        "customer_since": customer_info.get('created_at', 'Unknown'),
-        "last_service": customer_info.get('last_service_type', 'No previous service'),
-        "last_service_date": customer_info.get('last_service_date', ''),
-        "vehicles": customer_info.get('vehicles', 'No vehicles listed'),
-        "upcoming_appointments": customer_info.get('upcoming_appointments', 'None'),
+        "customer_since": customer_info.get("created_at", "Unknown"),
+        "last_service": customer_info.get("last_service_type", "No previous service"),
+        "last_service_date": customer_info.get("last_service_date", ""),
+        "vehicles": customer_info.get("vehicles", "No vehicles listed"),
+        "upcoming_appointments": customer_info.get("upcoming_appointments", "None"),
     }
     return build_system_prompt("inbound_existing", customer_context=customer_context)
 
 
 def build_outbound_reminder_prompt(
-    customer_name: str,
-    service_type: str,
-    appointment_time: str,
-    vehicle_description: str
+    customer_name: str, service_type: str, appointment_time: str, vehicle_description: str
 ) -> str:
     """
     Build prompt for outbound reminder call.

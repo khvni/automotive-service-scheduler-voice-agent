@@ -10,9 +10,10 @@ from pathlib import Path
 # Add server directory to path to import shared models
 sys.path.append(str(Path(__file__).parent.parent / "server"))
 
+import asyncio
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-import asyncio
 
 from worker.config import settings
 from worker.jobs.reminder_job import send_appointment_reminders

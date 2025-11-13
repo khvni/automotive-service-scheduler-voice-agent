@@ -2,16 +2,16 @@
 
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+# Import models from server
+from app.models import Appointment, CallLog, Customer
+from app.models.appointment import AppointmentStatus
+from app.models.call_log import CallDirection, CallStatus
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from twilio.rest import Client
 
 from worker.config import settings
-
-# Import models from server
-from app.models import Appointment, Customer, CallLog
-from app.models.appointment import AppointmentStatus
-from app.models.call_log import CallDirection, CallStatus
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,7 @@ async def send_appointment_reminders():
 
     # Create database connection
     engine = create_async_engine(settings.DATABASE_URL)
-    async_session_maker = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     try:
         async with async_session_maker() as db:
@@ -50,22 +48,28 @@ async def send_appointment_reminders():
             logger.info(f"Found {len(appointments)} appointments to remind")
 
             # Initialize Twilio client
-            twilio_client = Client(
-                settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN
-            )
+            twilio_client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
             for appointment in appointments:
                 try:
                     # Get customer information
-                    customer_query = select(Customer).where(
-                        Customer.id == appointment.customer_id
-                    )
+                    customer_query = select(Customer).where(Customer.id == appointment.customer_id)
                     customer_result = await db.execute(customer_query)
                     customer = customer_result.scalar_one_or_none()
 
                     if not customer or not customer.phone_number:
                         logger.warning(
                             f"Skipping appointment {appointment.id}: No customer phone number"
+                        )
+                        continue
+
+                    # POC SAFETY: Only call YOUR_TEST_NUMBER
+                    if (
+                        settings.YOUR_TEST_NUMBER
+                        and customer.phone_number != settings.YOUR_TEST_NUMBER
+                    ):
+                        logger.warning(
+                            f"Skipping call to {customer.phone_number} (POC safety - only calling {settings.YOUR_TEST_NUMBER})"
                         )
                         continue
 
@@ -105,9 +109,7 @@ async def send_appointment_reminders():
                     )
 
                 except Exception as e:
-                    logger.error(
-                        f"Failed to send reminder for appointment {appointment.id}: {e}"
-                    )
+                    logger.error(f"Failed to send reminder for appointment {appointment.id}: {e}")
                     continue
 
     except Exception as e:

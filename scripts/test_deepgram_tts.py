@@ -15,11 +15,12 @@ Usage:
 """
 
 import asyncio
+import logging
 import os
 import sys
-import logging
 import time
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Add parent directory to path for imports
@@ -29,8 +30,7 @@ from server.app.services.deepgram_tts import DeepgramTTSService
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,9 @@ async def test_connection(tts: DeepgramTTSService) -> bool:
 
     Verifies that WebSocket connection to Deepgram TTS can be established.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 1: Connection Establishment")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         await tts.connect()
@@ -66,9 +66,9 @@ async def test_text_synthesis(tts: DeepgramTTSService) -> bool:
 
     Sends a single text chunk and verifies audio is received.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 2: Basic Text Synthesis")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         test_text = "Hello, this is a test of the Deepgram text to speech system."
@@ -94,8 +94,9 @@ async def test_text_synthesis(tts: DeepgramTTSService) -> bool:
 
         if audio_chunks:
             total_bytes = sum(len(chunk) for chunk in audio_chunks)
-            logger.info(f"✓ Received {len(audio_chunks)} audio chunks, "
-                       f"total {total_bytes} bytes")
+            logger.info(
+                f"✓ Received {len(audio_chunks)} audio chunks, " f"total {total_bytes} bytes"
+            )
             return True
         else:
             logger.error("✗ No audio received")
@@ -112,9 +113,9 @@ async def test_streaming_synthesis(tts: DeepgramTTSService) -> bool:
 
     Sends multiple text chunks and verifies audio streaming works correctly.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 3: Streaming Text Synthesis")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         text_chunks = [
@@ -148,8 +149,9 @@ async def test_streaming_synthesis(tts: DeepgramTTSService) -> bool:
 
         if audio_chunks:
             total_bytes = sum(len(chunk) for chunk in audio_chunks)
-            logger.info(f"✓ Streaming successful: {len(audio_chunks)} chunks, "
-                       f"{total_bytes} bytes")
+            logger.info(
+                f"✓ Streaming successful: {len(audio_chunks)} chunks, " f"{total_bytes} bytes"
+            )
             return True
         else:
             logger.error("✗ No audio received from streaming")
@@ -166,9 +168,9 @@ async def test_flush_command(tts: DeepgramTTSService) -> bool:
 
     Verifies that flush properly finalizes audio generation.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 4: Flush Command")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         # Send text
@@ -209,9 +211,9 @@ async def test_clear_command(tts: DeepgramTTSService) -> bool:
 
     Simulates user interruption by clearing audio queue mid-generation.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 5: Clear Command (Barge-In)")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         # Send a long text
@@ -268,8 +270,10 @@ async def test_clear_command(tts: DeepgramTTSService) -> bool:
             new_chunks.append(audio)
 
         if new_chunks:
-            logger.info(f"✓ Clear/barge-in successful: "
-                       f"cleared queue and generated {len(new_chunks)} new chunks")
+            logger.info(
+                f"✓ Clear/barge-in successful: "
+                f"cleared queue and generated {len(new_chunks)} new chunks"
+            )
             return True
         else:
             logger.error("✗ No new audio after clear")
@@ -286,9 +290,9 @@ async def test_performance_metrics(tts: DeepgramTTSService) -> bool:
 
     Measures time-to-first-byte and overall latency.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 6: Performance Metrics")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         test_text = "This is a performance test."
@@ -344,9 +348,9 @@ async def test_disconnect(tts: DeepgramTTSService) -> bool:
 
     Verifies graceful connection closure and resource cleanup.
     """
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST 7: Disconnection")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     try:
         await tts.disconnect()
@@ -365,9 +369,9 @@ async def test_disconnect(tts: DeepgramTTSService) -> bool:
 
 async def main():
     """Run all TTS tests."""
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("DEEPGRAM TTS SERVICE TEST SUITE")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Load environment variables
     load_dotenv()
@@ -400,30 +404,32 @@ async def main():
     # Run tests
     results = {}
 
-    results['connection'] = await test_connection(tts)
+    results["connection"] = await test_connection(tts)
 
-    if results['connection']:
-        results['text_synthesis'] = await test_text_synthesis(tts)
-        results['streaming'] = await test_streaming_synthesis(tts)
-        results['flush'] = await test_flush_command(tts)
-        results['clear'] = await test_clear_command(tts)
-        results['performance'] = await test_performance_metrics(tts)
-        results['disconnect'] = await test_disconnect(tts)
+    if results["connection"]:
+        results["text_synthesis"] = await test_text_synthesis(tts)
+        results["streaming"] = await test_streaming_synthesis(tts)
+        results["flush"] = await test_flush_command(tts)
+        results["clear"] = await test_clear_command(tts)
+        results["performance"] = await test_performance_metrics(tts)
+        results["disconnect"] = await test_disconnect(tts)
     else:
         logger.error("Skipping remaining tests due to connection failure")
-        results.update({
-            'text_synthesis': False,
-            'streaming': False,
-            'flush': False,
-            'clear': False,
-            'performance': False,
-            'disconnect': False,
-        })
+        results.update(
+            {
+                "text_synthesis": False,
+                "streaming": False,
+                "flush": False,
+                "clear": False,
+                "performance": False,
+                "disconnect": False,
+            }
+        )
 
     # Print summary
-    logger.info("\n" + "="*70)
+    logger.info("\n" + "=" * 70)
     logger.info("TEST SUMMARY")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     passed = sum(1 for result in results.values() if result)
     total = len(results)
@@ -432,9 +438,9 @@ async def main():
         status = "✓ PASS" if result else "✗ FAIL"
         logger.info(f"{test_name.upper():.<50} {status}")
 
-    logger.info("="*70)
+    logger.info("=" * 70)
     logger.info(f"TOTAL: {passed}/{total} tests passed")
-    logger.info("="*70)
+    logger.info("=" * 70)
 
     # Exit with appropriate code
     sys.exit(0 if passed == total else 1)
