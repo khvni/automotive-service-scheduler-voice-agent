@@ -2,16 +2,36 @@
 Application configuration using pydantic-settings.
 """
 
+import os
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def find_env_file() -> str:
+    """Find .env file by checking multiple locations."""
+    # Try relative to this file (server/app/config.py)
+    current_dir = Path(__file__).parent
+    candidates = [
+        current_dir / ".env",  # server/app/.env
+        current_dir.parent / ".env",  # server/.env
+        current_dir.parent.parent / ".env",  # project root/.env
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    # Default to project root
+    return str(current_dir.parent.parent / ".env")
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file="../.env",
+        env_file=find_env_file(),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
