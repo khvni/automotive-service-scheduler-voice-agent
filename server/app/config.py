@@ -67,9 +67,11 @@ class Settings(BaseSettings):
     ELEVENLABS_API_KEY: str = ""
     ELEVENLABS_VOICE_ID: str = ""
 
-    # Google Calendar
-    GOOGLE_CALENDAR_ID: str = ""
-    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""  # Path to service account JSON
+    # Google Calendar (OAuth2)
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REFRESH_TOKEN: str = ""
+    CALENDAR_TIMEZONE: str = "America/New_York"
 
     # VIN API
     NHTSA_API_URL: str = "https://vpic.nhtsa.dot.gov/api"

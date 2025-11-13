@@ -7,6 +7,7 @@ from .deepgram_tts import DeepgramTTSService
 from .tts_interface import TTSInterface
 from .openai_service import OpenAIService
 from .tool_router import ToolRouter
+from .calendar_service import CalendarService
 
 __all__ = [
     'DeepgramSTTService',
@@ -14,4 +15,5 @@ __all__ = [
     'TTSInterface',
     'OpenAIService',
     'ToolRouter',
+    'CalendarService',
 ]
