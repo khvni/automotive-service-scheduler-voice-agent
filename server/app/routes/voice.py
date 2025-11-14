@@ -9,8 +9,10 @@ import asyncio
 import base64
 import json
 import logging
+import time
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config import settings
 from app.services.database import get_db
@@ -167,21 +169,32 @@ async def handle_incoming_call(request: Request):
 
 
 @router.post("/incoming-reminder")
-async def handle_incoming_reminder():
+async def handle_incoming_reminder(request: Request):
     """
     Twilio webhook for outbound reminder calls.
     Returns TwiML to establish WebSocket connection with reminder context.
 
     This endpoint is called by the worker job when making outbound reminder calls.
     The WebSocket handler will detect the reminder context and use appropriate prompts.
+
+    Query Parameters:
+        appointment_id: Optional appointment ID for contextualized reminder greeting
     """
     ws_url = f"wss://{settings.BASE_URL.replace('https://', '').replace('http://', '')}/api/v1/voice/media-stream"
+
+    # Check if appointment_id provided in query params
+    appointment_id = request.query_params.get("appointment_id")
+
+    # Build TwiML with parameters
+    parameters = '<Parameter name="call_type" value="outbound_reminder"/>'
+    if appointment_id:
+        parameters += f'\n            <Parameter name="appointment_id" value="{appointment_id}"/>'
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
         <Stream url="{ws_url}">
-            <Parameter name="call_type" value="outbound_reminder"/>
+            {parameters}
         </Stream>
     </Connect>
 </Response>"""
@@ -234,6 +247,14 @@ async def handle_media_stream(websocket: WebSocket):
     stream_sid: Optional[str] = None
     caller_phone: Optional[str] = None
     is_speaking = False
+
+    # Mark-based audio playback tracking (call-gpt pattern)
+    # Tracks which audio chunks are actively playing on Twilio
+    marks: List[str] = []
+
+    # Silence detection tracking
+    last_user_input_time: float = time.time()
+    silence_prompted: bool = False
 
     # Services (initialized in try block)
     stt: Optional[DeepgramSTTService] = None
@@ -437,7 +458,7 @@ async def handle_media_stream(websocket: WebSocket):
                                         # Encode to base64 for Twilio
                                         audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
 
-                                        # Send to Twilio
+                                        # Send to Twilio with mark tracking
                                         await websocket.send_text(
                                             json.dumps({
                                                 "event": "media",
@@ -445,6 +466,17 @@ async def handle_media_stream(websocket: WebSocket):
                                                 "media": {"payload": audio_b64},
                                             })
                                         )
+
+                                        # Send mark event immediately after media (call-gpt pattern)
+                                        mark_label = str(uuid.uuid4())
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "mark",
+                                                "streamSid": stream_sid,
+                                                "mark": {"name": mark_label},
+                                            })
+                                        )
+                                        marks.append(mark_label)
 
                                 logger.info("Initial greeting sent successfully")
                             except Exception as e:
@@ -477,7 +509,7 @@ async def handle_media_stream(websocket: WebSocket):
                                         # Encode to base64 for Twilio
                                         audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
 
-                                        # Send to Twilio
+                                        # Send to Twilio with mark tracking
                                         await websocket.send_text(
                                             json.dumps({
                                                 "event": "media",
@@ -485,6 +517,17 @@ async def handle_media_stream(websocket: WebSocket):
                                                 "media": {"payload": audio_b64},
                                             })
                                         )
+
+                                        # Send mark event immediately after media (call-gpt pattern)
+                                        mark_label = str(uuid.uuid4())
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "mark",
+                                                "streamSid": stream_sid,
+                                                "mark": {"name": mark_label},
+                                            })
+                                        )
+                                        marks.append(mark_label)
 
                                 logger.info("Inbound proactive greeting sent successfully")
                             except Exception as e:
@@ -507,9 +550,13 @@ async def handle_media_stream(websocket: WebSocket):
                             logger.debug("Skipped empty audio packet")
 
                     elif event == "mark":
-                        # Mark acknowledgment (used for synchronization in reference)
+                        # Mark acknowledgment - audio chunk completed playback
                         mark_name = data["mark"].get("name")
-                        logger.debug(f"Mark received: {mark_name}")
+                        if mark_name in marks:
+                            marks.remove(mark_name)
+                            logger.debug(f"Mark completed and removed: {mark_name} ({len(marks)} remaining)")
+                        else:
+                            logger.debug(f"Mark received but not tracked: {mark_name}")
 
                     elif event == "stop":
                         logger.info("Twilio Media Stream stop event received")
@@ -563,10 +610,10 @@ async def handle_media_stream(websocket: WebSocket):
                         continue
 
                     # Handle interim results (barge-in detection)
-                    # Reference: Deepgram's implementation triggers on ANY interim while speaking
+                    # call-gpt pattern: Only trigger if audio is actively playing (marks.length > 0) AND text is substantial (> 5 chars)
                     if transcript_type == "interim":
-                        if is_speaking:
-                            logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking: '{transcript_text}'")
+                        if len(marks) > 0 and len(transcript_text) > 5:
+                            logger.info(f"BARGE-IN DETECTED: User spoke while audio playing (marks={len(marks)}): '{transcript_text}'")
 
                             # Clear Twilio audio playback immediately
                             await websocket.send_text(
@@ -588,6 +635,11 @@ async def handle_media_stream(websocket: WebSocket):
                     elif transcript_type == "final" and transcript_data.get("speech_final"):
                         user_message = transcript_text
                         logger.info(f"[VOICE] ===== USER SAID: {user_message} =====")
+
+                        # Update last user input time for silence detection
+                        nonlocal last_user_input_time, silence_prompted
+                        last_user_input_time = time.time()
+                        silence_prompted = False  # Reset silence prompt flag
 
                         # Add to conversation history
                         openai.add_user_message(user_message)
@@ -620,7 +672,7 @@ async def handle_media_stream(websocket: WebSocket):
                                         if chunks_sent == 1:
                                             metrics.track_tts_first_byte()
 
-                                        # Send audio to Twilio (base64 encode mulaw)
+                                        # Send audio to Twilio (base64 encode mulaw) with mark tracking
                                         await websocket.send_text(
                                             json.dumps({
                                                 "event": "media",
@@ -630,7 +682,19 @@ async def handle_media_stream(websocket: WebSocket):
                                                 },
                                             })
                                         )
-                                        logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio")
+
+                                        # Send mark event immediately after media (call-gpt pattern)
+                                        mark_label = str(uuid.uuid4())
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "mark",
+                                                "streamSid": stream_sid,
+                                                "mark": {"name": mark_label},
+                                            })
+                                        )
+                                        marks.append(mark_label)
+
+                                        logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio with mark {mark_label}")
 
                                     except asyncio.TimeoutError:
                                         # No audio for 500ms, check if we're still speaking
@@ -759,8 +823,20 @@ async def handle_media_stream(websocket: WebSocket):
                                     break
 
                         if trigger_hangup:
-                            logger.info(f"[VOICE] Ending call in 2 seconds")
-                            await asyncio.sleep(2)  # Let final message finish playing
+                            logger.info(f"[VOICE] Goodbye detected - waiting for audio to finish playing ({len(marks)} marks remaining)")
+
+                            # Wait for all audio marks to clear (audio finished playing)
+                            max_wait = 30  # Maximum 30 seconds to wait
+                            wait_start = time.time()
+                            while len(marks) > 0 and (time.time() - wait_start) < max_wait:
+                                await asyncio.sleep(0.1)
+                                if len(marks) > 0:
+                                    logger.debug(f"[VOICE] Waiting for {len(marks)} marks to clear...")
+
+                            if len(marks) > 0:
+                                logger.warning(f"[VOICE] Timeout waiting for marks to clear ({len(marks)} remaining)")
+                            else:
+                                logger.info(f"[VOICE] All audio finished playing, terminating call")
 
                             # Send hangup event to Twilio (clears audio queue)
                             try:
@@ -823,9 +899,106 @@ async def handle_media_stream(websocket: WebSocket):
                     },
                 )
 
-        # Run both tasks concurrently using asyncio.gather
-        logger.info("Starting concurrent tasks (receive + process)")
-        await asyncio.gather(receive_from_twilio(), process_transcripts())
+        async def monitor_silence():
+            """
+            Monitor for prolonged silence and prompt user.
+
+            After 15 seconds of silence: prompt "Hello, are you still there?"
+            After 20 seconds total (5 more after prompt): hang up
+            """
+            nonlocal is_speaking, last_user_input_time, silence_prompted
+
+            try:
+                while True:
+                    await asyncio.sleep(1)  # Check every second
+
+                    # Skip if AI is currently speaking
+                    if is_speaking or len(marks) > 0:
+                        continue
+
+                    silence_duration = time.time() - last_user_input_time
+
+                    # First prompt after 15 seconds
+                    if silence_duration >= 15 and not silence_prompted:
+                        logger.info(f"[SILENCE DETECTION] 15s of silence detected, prompting user")
+                        silence_prompted = True
+
+                        # Generate prompt through TTS
+                        prompt_message = "Hello, are you still there?"
+                        openai.add_assistant_message(prompt_message)
+
+                        # Send through TTS
+                        is_speaking = True
+                        async for audio_chunk in tts.text_to_speech(prompt_message):
+                            if audio_chunk:
+                                audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
+
+                                # Send audio with mark tracking
+                                await websocket.send_text(
+                                    json.dumps({
+                                        "event": "media",
+                                        "streamSid": stream_sid,
+                                        "media": {"payload": audio_b64},
+                                    })
+                                )
+
+                                mark_label = str(uuid.uuid4())
+                                await websocket.send_text(
+                                    json.dumps({
+                                        "event": "mark",
+                                        "streamSid": stream_sid,
+                                        "mark": {"name": mark_label},
+                                    })
+                                )
+                                marks.append(mark_label)
+
+                        is_speaking = False
+                        logger.info("[SILENCE DETECTION] Prompt sent, waiting 5 more seconds")
+
+                    # Hang up after 20 seconds total (5 seconds after prompt)
+                    elif silence_duration >= 20 and silence_prompted:
+                        logger.info(f"[SILENCE DETECTION] 20s total silence, hanging up")
+
+                        # Wait for any remaining audio to finish
+                        max_wait = 10
+                        wait_start = time.time()
+                        while len(marks) > 0 and (time.time() - wait_start) < max_wait:
+                            await asyncio.sleep(0.1)
+
+                        # Terminate call
+                        try:
+                            await websocket.send_text(
+                                json.dumps({"event": "hangup", "streamSid": stream_sid})
+                            )
+                            logger.info("[SILENCE DETECTION] Hangup event sent")
+                        except Exception as e:
+                            logger.error(f"[SILENCE DETECTION] Failed to send hangup: {e}")
+
+                        if call_sid:
+                            try:
+                                twilio_client = TwilioClient(
+                                    settings.TWILIO_ACCOUNT_SID,
+                                    settings.TWILIO_AUTH_TOKEN
+                                )
+                                twilio_client.calls(call_sid).update(status='completed')
+                                logger.info(f"[SILENCE DETECTION] Call {call_sid} terminated")
+                            except Exception as e:
+                                logger.error(f"[SILENCE DETECTION] Failed to terminate call: {e}")
+
+                        break  # Exit monitoring loop
+
+            except asyncio.CancelledError:
+                logger.debug("Silence monitoring cancelled")
+            except Exception as e:
+                logger.error(f"Error in silence monitoring: {e}", exc_info=True)
+
+        # Run three tasks concurrently using asyncio.gather
+        logger.info("Starting concurrent tasks (receive + process + silence monitoring)")
+        await asyncio.gather(
+            receive_from_twilio(),
+            process_transcripts(),
+            monitor_silence()
+        )
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")

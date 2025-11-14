@@ -329,7 +329,15 @@ async def async_main():
             tester.make_outbound_call("general", appointment_id=appointment_id)
 
         elif command == "outbound-reminder":
-            tester.make_outbound_call("reminder")
+            # Get first upcoming appointment for contextualized reminder
+            appointment_id = await get_first_appointment()
+            if appointment_id:
+                print(f"ℹ️  Using appointment ID {appointment_id} for reminder call")
+                print()
+            else:
+                print("⚠️  No upcoming appointments found - reminder will lack context")
+                print()
+            tester.make_outbound_call("reminder", appointment_id=appointment_id)
 
         elif command == "status":
             if len(sys.argv) < 3:
