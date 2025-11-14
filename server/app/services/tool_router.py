@@ -128,13 +128,13 @@ class ToolRouter:
             logger.error(f"Error looking up customer: {e}", exc_info=True)
             return {"success": False, "error": str(e), "message": "Error looking up customer"}
 
-    async def _get_available_slots(self, date: str, service_type: str = None) -> Dict[str, Any]:
+    async def _get_available_slots(self, date: str, duration_minutes: int = 30) -> Dict[str, Any]:
         """
         Get available appointment slots for a date.
 
         Args:
             date: Date string (YYYY-MM-DD)
-            service_type: Type of service (optional) - maps to duration
+            duration_minutes: Slot duration in minutes (default: 30)
 
         Returns:
             Dict with available time slots
@@ -142,16 +142,6 @@ class ToolRouter:
         try:
             # Import here to avoid circular dependencies
             from app.tools.crm_tools import get_available_slots
-
-            # Map service type to duration (if provided)
-            service_duration_map = {
-                "oil_change": 30,
-                "tire_rotation": 30,
-                "inspection": 45,
-                "brake_service": 90,
-                "general_service": 60,
-            }
-            duration_minutes = service_duration_map.get(service_type, 60) if service_type else 60
 
             result = await get_available_slots(date, duration_minutes)
 
@@ -170,8 +160,11 @@ class ToolRouter:
         self,
         customer_id: int,
         vehicle_id: int,
+        scheduled_at: str,
         service_type: str,
-        start_time: str,
+        duration_minutes: int = 60,
+        service_description: str = None,
+        customer_concerns: str = None,
         notes: str = None,
     ) -> Dict[str, Any]:
         """
@@ -180,8 +173,11 @@ class ToolRouter:
         Args:
             customer_id: Customer ID
             vehicle_id: Vehicle ID
+            scheduled_at: ISO format datetime string
             service_type: Type of service
-            start_time: ISO format datetime string (matches schema parameter name)
+            duration_minutes: Duration in minutes (default: 60)
+            service_description: Optional service description
+            customer_concerns: Optional customer concerns
             notes: Optional notes
 
         Returns:
@@ -191,25 +187,15 @@ class ToolRouter:
             # Import here to avoid circular dependencies
             from app.tools.crm_tools import book_appointment
 
-            # Map service type to duration
-            service_duration_map = {
-                "oil_change": 30,
-                "tire_rotation": 30,
-                "inspection": 45,
-                "brake_service": 90,
-                "general_service": 60,
-            }
-            duration_minutes = service_duration_map.get(service_type, 60)
-
             result = await book_appointment(
                 db=self.db,
                 customer_id=customer_id,
                 vehicle_id=vehicle_id,
-                scheduled_at=start_time,  # Map start_time to scheduled_at for crm_tools
+                scheduled_at=scheduled_at,
                 service_type=service_type,
                 duration_minutes=duration_minutes,
-                service_description=None,
-                customer_concerns=notes,  # Map notes to customer_concerns
+                service_description=service_description,
+                customer_concerns=customer_concerns,
                 notes=notes,
             )
 
@@ -270,14 +256,14 @@ class ToolRouter:
             return {"success": False, "error": str(e), "message": "Error cancelling appointment"}
 
     async def _reschedule_appointment(
-        self, appointment_id: int, new_start_time: str
+        self, appointment_id: int, new_datetime: str
     ) -> Dict[str, Any]:
         """
         Reschedule an appointment to a new time.
 
         Args:
             appointment_id: Appointment ID to reschedule
-            new_start_time: New datetime (ISO format) - matches schema parameter name
+            new_datetime: New datetime (ISO format)
 
         Returns:
             Dict with reschedule result
@@ -286,7 +272,7 @@ class ToolRouter:
             # Import here to avoid circular dependencies
             from app.tools.crm_tools import reschedule_appointment
 
-            result = await reschedule_appointment(self.db, appointment_id, new_start_time)
+            result = await reschedule_appointment(self.db, appointment_id, new_datetime)
 
             # reschedule_appointment returns its own success/error structure
             return result
