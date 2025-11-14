@@ -86,3 +86,6 @@ coverage.xml
 
 # PRD file (as requested)
 PRD.md
+
+# Generated markdown files with paths
+YOUR PATH/
