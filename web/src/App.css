@@ -38,7 +38,8 @@
   color: #333;
 }
 
-.status-ok, .status-error {
+.status-ok,
+.status-error {
   display: flex;
   align-items: center;
   gap: 1rem;

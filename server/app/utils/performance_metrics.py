@@ -46,7 +46,7 @@ class PerformanceMetrics:
         """Track time to first token from LLM."""
         if self.first_llm_token and self.llm_start > 0:
             duration_ms = (time.time() - self.llm_start) * 1000
-            self.metrics['llm_time_to_first_token_ms'] = duration_ms
+            self.metrics["llm_time_to_first_token_ms"] = duration_ms
             logger.info(f"⚡ LLM Time to First Token: {duration_ms:.2f}ms")
             self.first_llm_token = False
 
@@ -58,7 +58,7 @@ class PerformanceMetrics:
         """Track time to first audio byte from TTS."""
         if self.first_audio_byte and self.tts_start > 0:
             duration_ms = (time.time() - self.tts_start) * 1000
-            self.metrics['tts_time_to_first_byte_ms'] = duration_ms
+            self.metrics["tts_time_to_first_byte_ms"] = duration_ms
             logger.info(f"🎵 TTS Time to First Byte: {duration_ms:.2f}ms")
             self.first_audio_byte = False
 
@@ -66,7 +66,7 @@ class PerformanceMetrics:
         """Track overall response latency from user speech to audio playback."""
         if start_time > 0:
             duration_ms = (time.time() - start_time) * 1000
-            self.metrics['overall_response_latency_ms'] = duration_ms
+            self.metrics["overall_response_latency_ms"] = duration_ms
             logger.info(f"📊 Overall Response Latency: {duration_ms:.2f}ms")
 
     def reset(self) -> None:

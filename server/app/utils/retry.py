@@ -11,7 +11,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 async def with_retry(
@@ -20,7 +20,7 @@ async def with_retry(
     backoff_factor: float = 1.5,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
-    operation_name: Optional[str] = None
+    operation_name: Optional[str] = None,
 ) -> T:
     """
     Retry an async operation with exponential backoff.
@@ -64,18 +64,14 @@ async def with_retry(
 
             if attempt < max_retries - 1:
                 # Calculate delay with exponential backoff
-                delay = min(initial_delay * (backoff_factor ** attempt), max_delay)
+                delay = min(initial_delay * (backoff_factor**attempt), max_delay)
 
-                logger.warning(
-                    f"⚠️  {name} failed (attempt {attempt + 1}/{max_retries}): {str(e)}"
-                )
+                logger.warning(f"⚠️  {name} failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
                 logger.info(f"Retrying in {delay:.1f}s...")
 
                 await asyncio.sleep(delay)
             else:
-                logger.error(
-                    f"❌ {name} failed after {max_retries} attempts: {str(e)}"
-                )
+                logger.error(f"❌ {name} failed after {max_retries} attempts: {str(e)}")
 
     # All retries exhausted
     raise Exception(
@@ -89,7 +85,7 @@ def sync_with_retry(
     backoff_factor: float = 1.5,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
-    operation_name: Optional[str] = None
+    operation_name: Optional[str] = None,
 ) -> T:
     """
     Retry a synchronous operation with exponential backoff.
@@ -128,18 +124,14 @@ def sync_with_retry(
 
             if attempt < max_retries - 1:
                 # Calculate delay with exponential backoff
-                delay = min(initial_delay * (backoff_factor ** attempt), max_delay)
+                delay = min(initial_delay * (backoff_factor**attempt), max_delay)
 
-                logger.warning(
-                    f"⚠️  {name} failed (attempt {attempt + 1}/{max_retries}): {str(e)}"
-                )
+                logger.warning(f"⚠️  {name} failed (attempt {attempt + 1}/{max_retries}): {str(e)}")
                 logger.info(f"Retrying in {delay:.1f}s...")
 
                 time.sleep(delay)
             else:
-                logger.error(
-                    f"❌ {name} failed after {max_retries} attempts: {str(e)}"
-                )
+                logger.error(f"❌ {name} failed after {max_retries} attempts: {str(e)}")
 
     # All retries exhausted
     raise Exception(

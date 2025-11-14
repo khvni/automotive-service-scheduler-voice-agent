@@ -190,7 +190,7 @@ async def search_customers_by_name(
             # Both provided - match both
             stmt = stmt.where(
                 Customer.first_name.ilike(f"%{first_name}%"),
-                Customer.last_name.ilike(f"%{last_name}%")
+                Customer.last_name.ilike(f"%{last_name}%"),
             )
         elif first_name:
             # Only first name
@@ -208,17 +208,19 @@ async def search_customers_by_name(
         # Build response list
         customer_list = []
         for customer in customers:
-            customer_list.append({
-                "id": customer.id,
-                "first_name": customer.first_name,
-                "last_name": customer.last_name,
-                "phone_number": customer.phone_number,
-                "email": customer.email,
-                "customer_since": (
-                    customer.customer_since.isoformat() if customer.customer_since else None
-                ),
-                "vehicle_count": len(customer.vehicles) if customer.vehicles else 0,
-            })
+            customer_list.append(
+                {
+                    "id": customer.id,
+                    "first_name": customer.first_name,
+                    "last_name": customer.last_name,
+                    "phone_number": customer.phone_number,
+                    "email": customer.email,
+                    "customer_since": (
+                        customer.customer_since.isoformat() if customer.customer_since else None
+                    ),
+                    "vehicle_count": len(customer.vehicles) if customer.vehicles else 0,
+                }
+            )
 
         logger.info(
             f"Found {len(customer_list)} customers matching "
@@ -230,7 +232,7 @@ async def search_customers_by_name(
     except Exception as e:
         logger.error(
             f"Error searching customers by name (first='{first_name}', last='{last_name}'): {e}",
-            exc_info=True
+            exc_info=True,
         )
         raise
 

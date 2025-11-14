@@ -181,4 +181,7 @@ class Customer(Base, TimestampMixin):
         return value.upper() if value else value
 
     def __repr__(self):
-        return f"<Customer(id={self.id}, name='{self.first_name} {self.last_name}', phone='{self.phone_number}')>"
+        return (
+            f"<Customer(id={self.id}, name='{self.first_name} {self.last_name}', "
+            f"phone='{self.phone_number}')>"
+        )

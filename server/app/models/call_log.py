@@ -71,4 +71,7 @@ class CallLog(Base, TimestampMixin):
     customer = relationship("Customer", back_populates="call_logs")
 
     def __repr__(self):
-        return f"<CallLog(id={self.id}, call_sid='{self.call_sid}', direction='{self.direction}', status='{self.status}')>"
+        return (
+            f"<CallLog(id={self.id}, call_sid='{self.call_sid}', "
+            f"direction='{self.direction}', status='{self.status}')>"
+        )

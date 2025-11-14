@@ -2,7 +2,6 @@
 Application configuration using pydantic-settings.
 """
 
-import os
 from pathlib import Path
 from typing import List
 

@@ -283,10 +283,10 @@
 
 ## Emergency Contacts
 
-**On-Call Engineer:** [Name, Phone]  
-**Database Admin:** [Name, Phone]  
-**DevOps Lead:** [Name, Phone]  
-**Product Owner:** [Name, Phone]  
+**On-Call Engineer:** [Name, Phone]
+**Database Admin:** [Name, Phone]
+**DevOps Lead:** [Name, Phone]
+**Product Owner:** [Name, Phone]
 
 **Third-Party Support:**
 - Twilio Support: https://support.twilio.com
@@ -298,7 +298,7 @@
 
 ## Notes
 
-**Last Updated:** 2025-01-12  
-**Deployment Target:** Production  
-**Expected Launch Date:** [TBD]  
+**Last Updated:** 2025-01-12
+**Deployment Target:** Production
+**Expected Launch Date:** [TBD]
 **Responsible Team:** [Your Team Name]

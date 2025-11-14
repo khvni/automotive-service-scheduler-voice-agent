@@ -80,7 +80,8 @@ class Vehicle(Base, TimestampMixin):
         vin_pattern = r"^[A-HJ-NPR-Z0-9]{17}$"
         if not re.match(vin_pattern, value):
             raise ValueError(
-                f"Invalid VIN format: {value}. VIN must contain only letters (except I, O, Q) and numbers"
+                f"Invalid VIN format: {value}. VIN must contain only letters "
+                f"(except I, O, Q) and numbers"
             )
 
         return value

@@ -49,12 +49,14 @@ class AudioBuffer:
         chunks_to_send = []
         while len(self.buffer) >= self.buffer_size:
             # Extract a complete buffer
-            chunks_to_send.append(bytes(self.buffer[:self.buffer_size]))
+            chunks_to_send.append(bytes(self.buffer[: self.buffer_size]))
             # Remove from buffer
-            self.buffer = self.buffer[self.buffer_size:]
+            self.buffer = self.buffer[self.buffer_size :]
 
         if chunks_to_send:
-            logger.debug(f"AudioBuffer: Sending {len(chunks_to_send)} chunk(s) of {self.buffer_size} bytes each")
+            logger.debug(
+                f"AudioBuffer: Sending {len(chunks_to_send)} chunk(s) of {self.buffer_size} bytes each"
+            )
 
         return chunks_to_send
 

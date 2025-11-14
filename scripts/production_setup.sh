@@ -17,7 +17,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Check if running as root
-if [ "$EUID" -eq 0 ]; then 
+if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}Error: Do not run this script as root${NC}"
     exit 1
 fi
@@ -170,7 +170,7 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     if [ "$ID" = "ubuntu" ] || [ "$ID" = "debian" ]; then
         echo -e "${YELLOW}Creating systemd service files...${NC}"
-        
+
         # Server service
         sudo tee /etc/systemd/system/automotive-voice.service > /dev/null <<EOF
 [Unit]
@@ -190,7 +190,7 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-        
+
         # Worker service
         sudo tee /etc/systemd/system/automotive-worker.service > /dev/null <<EOF
 [Unit]
@@ -210,7 +210,7 @@ RestartSec=30
 [Install]
 WantedBy=multi-user.target
 EOF
-        
+
         sudo systemctl daemon-reload
         echo -e "${GREEN}✓ Systemd service files created${NC}"
         echo -e "  To enable: sudo systemctl enable automotive-voice automotive-worker"

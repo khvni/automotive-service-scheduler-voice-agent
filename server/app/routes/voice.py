@@ -19,12 +19,12 @@ from app.services.database import get_db
 from app.services.deepgram_stt import DeepgramSTTService
 from app.services.deepgram_tts import DeepgramTTSService
 from app.services.openai_service import OpenAIService
-from app.services.redis_client import get_session, set_session, update_session
+from app.services.redis_client import set_session, update_session
 from app.services.tool_definitions import TOOL_SCHEMAS
 from app.services.tool_router import ToolRouter
 from app.utils.audio_buffer import AudioBuffer
 from app.utils.performance_metrics import PerformanceMetrics
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from twilio.rest import Client as TwilioClient
@@ -33,7 +33,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Constants (removed BARGE_IN_WORD_THRESHOLD - now triggers on ANY interim result for instant interruption)
+# Constants (removed BARGE_IN_WORD_THRESHOLD - now triggers on ANY interim
+# result for instant interruption)
 
 
 # System prompt for the AI assistant
@@ -47,10 +48,14 @@ Your role:
 - Provide a warm, efficient customer service experience
 
 STRICT BOUNDARIES:
-- You ONLY discuss automotive service topics (vehicle repairs, maintenance, appointments, pricing, hours)
-- You are NOT a general assistant - you are specialized in automotive service ONLY
-- If asked about ANY non-automotive topic (technology, politics, cybersecurity, news, etc.), politely decline:
-  "I'm specialized in automotive service only. How can I help with your vehicle today?"
+- You ONLY discuss automotive service topics (vehicle repairs, maintenance,
+  appointments, pricing, hours)
+- You are NOT a general assistant - you are specialized in automotive service
+  ONLY
+- If asked about ANY non-automotive topic (technology, politics, cybersecurity,
+  news, etc.), politely decline:
+  "I'm specialized in automotive service only. How can I help with your
+  vehicle today?"
 - NEVER provide information outside automotive service, even if you know the answer
 
 FORMATTING RULES (CRITICAL):
@@ -88,8 +93,10 @@ When you don't know something:
 - For policy exceptions: "Let me connect you with a manager who can help with that"
 
 Customer lookup guidelines:
-- If you can't find a customer by name, clearly state: "I don't see [name] in our system. Could you provide your phone number so I can look you up?"
-- If a customer has no vehicles on file, state: "I see your account, but I don't have any vehicles listed. What vehicle would you like to bring in?"
+- If you can't find a customer by name, clearly state: "I don't see [name] in
+  our system. Could you provide your phone number so I can look you up?"
+- If a customer has no vehicles on file, state: "I see your account, but I
+  don't have any vehicles listed. What vehicle would you like to bring in?"
 - NEVER loop with repeated apologies - if a lookup fails twice, ask for different information
 - Move the conversation forward - don't get stuck retrying the same failed approach
 
@@ -130,7 +137,8 @@ async def handle_incoming_call(request: Request):
     """
     # Get form data from Twilio webhook
     form_data = await request.form()
-    call_direction = form_data.get("Direction", "inbound")  # "inbound" or "outbound-api"
+    # "inbound" or "outbound-api"
+    call_direction = form_data.get("Direction", "inbound")
     caller_number = form_data.get("From", "")
 
     # Get optional appointment_id from query parameters
@@ -180,8 +188,9 @@ async def handle_incoming_reminder(request: Request):
     Twilio webhook for outbound reminder calls.
     Returns TwiML to establish WebSocket connection with reminder context.
 
-    This endpoint is called by the worker job when making outbound reminder calls.
-    The WebSocket handler will detect the reminder context and use appropriate prompts.
+    This endpoint is called by the worker job when making outbound reminder
+    calls. The WebSocket handler will detect the reminder context and use
+    appropriate prompts.
 
     Query Parameters:
         appointment_id: Optional appointment ID for contextualized reminder greeting
@@ -339,7 +348,8 @@ async def handle_media_stream(websocket: WebSocket):
                         call_sid = data["start"]["callSid"]
                         stream_sid = data["start"]["streamSid"]
 
-                        # Extract caller phone from customParameters or start data
+                        # Extract caller phone from customParameters or
+                        # start data
                         custom_params = data["start"].get("customParameters", {})
                         caller_phone = custom_params.get("From") or data["start"].get("from")
 
@@ -365,10 +375,12 @@ async def handle_media_stream(websocket: WebSocket):
                         if call_type == "outbound_reminder" and appointment_id_param:
                             # Build reminder-specific system prompt with appointment context
                             try:
-                                from app.services.system_prompts import build_outbound_reminder_prompt
                                 from app.models.appointment import Appointment
-                                from app.models.vehicle import Vehicle
                                 from app.models.customer import Customer
+                                from app.models.vehicle import Vehicle
+                                from app.services.system_prompts import (
+                                    build_outbound_reminder_prompt,
+                                )
                                 from sqlalchemy import select
 
                                 # Parse appointment_id with validation
@@ -377,7 +389,9 @@ async def handle_media_stream(websocket: WebSocket):
                                     if appt_id <= 0:
                                         raise ValueError("Appointment ID must be positive")
                                 except (ValueError, TypeError) as e:
-                                    logger.warning(f"Invalid appointment_id '{appointment_id_param}': {e}")
+                                    logger.warning(
+                                        f"Invalid appointment_id '{appointment_id_param}': {e}"
+                                    )
                                     raise  # Re-raise to skip reminder prompt setup
 
                                 # Query appointment with vehicle and customer
@@ -394,7 +408,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                                     # Format appointment details for prompt
                                     customer_name = f"{customer.first_name} {customer.last_name}"
-                                    service_type = appointment.service_type.value.replace('_', ' ')
+                                    service_type = appointment.service_type.value.replace("_", " ")
 
                                     # Format appointment time
                                     now = datetime.now()
@@ -409,7 +423,10 @@ async def handle_media_stream(websocket: WebSocket):
                                     else:
                                         time_desc = appt_datetime.strftime("%A, %B %d")
 
-                                    formatted_time = f"{time_desc} at {appt_datetime.strftime('%I:%M %p').lstrip('0')}"
+                                    formatted_time = (
+                                        f"{time_desc} at "
+                                        f"{appt_datetime.strftime('%I:%M %p').lstrip('0')}"
+                                    )
                                     vehicle_desc = f"{vehicle.year} {vehicle.make} {vehicle.model}"
 
                                     # Build reminder prompt with context
@@ -417,13 +434,17 @@ async def handle_media_stream(websocket: WebSocket):
                                         customer_name=customer_name,
                                         service_type=service_type,
                                         appointment_time=formatted_time,
-                                        vehicle_description=vehicle_desc
+                                        vehicle_description=vehicle_desc,
                                     )
 
                                     openai.set_system_prompt(reminder_prompt)
-                                    logger.info(f"Set reminder system prompt for appointment {appt_id}")
+                                    logger.info(
+                                        f"Set reminder system prompt for appointment {appt_id}"
+                                    )
                                 else:
-                                    logger.warning(f"Appointment {appt_id} not found for reminder call")
+                                    logger.warning(
+                                        f"Appointment {appt_id} not found for reminder call"
+                                    )
                             except Exception as e:
                                 logger.error(f"Failed to build reminder prompt: {e}", exc_info=True)
 
@@ -436,13 +457,22 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 if customer:
                                     # Enhance prompt with customer context
-                                    personalized_prompt = SYSTEM_PROMPT + f"\n\nCUSTOMER CONTEXT:\n"
-                                    personalized_prompt += f"- Name: {customer['first_name']} {customer['last_name']}\n"
-                                    personalized_prompt += f"- Customer since: {customer.get('customer_since', 'Unknown')}\n"
+                                    personalized_prompt = (
+                                        SYSTEM_PROMPT + "\n\nCUSTOMER CONTEXT:\n"
+                                    )
+                                    personalized_prompt += (
+                                        f"- Name: {customer['first_name']} "
+                                        f"{customer['last_name']}\n"
+                                    )
+                                    personalized_prompt += (
+                                        f"- Customer since: "
+                                        f"{customer.get('customer_since', 'Unknown')}\n"
+                                    )
 
                                     if customer.get("last_service_date"):
                                         personalized_prompt += (
-                                            f"- Last service: {customer['last_service_date']}\n"
+                                            f"- Last service: "
+                                            f"{customer['last_service_date']}\n"
                                         )
 
                                     if customer.get("vehicles"):
@@ -455,7 +485,8 @@ async def handle_media_stream(websocket: WebSocket):
                                         )
 
                                     personalized_prompt += (
-                                        f"\nGreet them by name and provide personalized service!"
+                                        "\nGreet them by name and provide "
+                                        "personalized service!"
                                     )
                                     openai.set_system_prompt(personalized_prompt)
                                     logger.info(
@@ -471,7 +502,9 @@ async def handle_media_stream(websocket: WebSocket):
                         if call_type == "outbound_reminder":
                             # OUTBOUND REMINDER CALL - Let the system prompt guide the greeting
                             # The reminder prompt already has all the context, so use a simple greeting
-                            logger.info("Outbound reminder call detected - using context-aware greeting")
+                            logger.info(
+                                "Outbound reminder call detected - using context-aware greeting"
+                            )
 
                             try:
                                 # Simple greeting - the LLM will provide details based on system prompt
@@ -485,35 +518,50 @@ async def handle_media_stream(websocket: WebSocket):
                                     if audio_chunk:
                                         audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "media",
-                                                "streamSid": stream_sid,
-                                                "media": {"payload": audio_b64},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "media",
+                                                    "streamSid": stream_sid,
+                                                    "media": {"payload": audio_b64},
+                                                }
+                                            )
                                         )
 
                                         mark_label = str(uuid.uuid4())
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "mark",
-                                                "streamSid": stream_sid,
-                                                "mark": {"name": mark_label},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "mark",
+                                                    "streamSid": stream_sid,
+                                                    "mark": {"name": mark_label},
+                                                }
+                                            )
                                         )
                                         marks.append(mark_label)
 
                                 logger.info("Reminder greeting sent successfully")
                             except Exception as e:
-                                logger.error(f"Failed to send reminder greeting: {e}", exc_info=True)
+                                logger.error(
+                                    f"Failed to send reminder greeting: {e}", exc_info=True
+                                )
 
-                        elif call_direction == "outbound" or custom_params.get("is_outbound") == "true":
+                        elif (
+                            call_direction == "outbound"
+                            or custom_params.get("is_outbound") == "true"
+                        ):
                             # OUTBOUND CALL - Appointment-specific greeting
-                            logger.info("Outbound call detected - sending initial greeting")
+                            logger.info(
+                                "Outbound call detected - sending initial greeting"
+                            )
 
                             try:
-                                # Check if appointment_id was provided for contextualized greeting
+                                # Check if appointment_id was provided for
+                                # contextualized greeting
                                 appointment_id = custom_params.get("appointment_id", "")
-                                initial_message = "Hi, this is Sophie from Otto's Auto. Is this a good time to talk?"
+                                initial_message = (
+                                    "Hi, this is Sophie from Otto's Auto. "
+                                    "Is this a good time to talk?"
+                                )
 
                                 if appointment_id:
                                     try:
@@ -523,15 +571,17 @@ async def handle_media_stream(websocket: WebSocket):
                                             if appt_id <= 0:
                                                 raise ValueError("Appointment ID must be positive")
                                         except (ValueError, TypeError) as e:
-                                            logger.warning(f"Invalid appointment_id '{appointment_id}': {e}, using generic greeting")
+                                            logger.warning(
+                                                f"Invalid appointment_id '{appointment_id}': {e}, using generic greeting"
+                                            )
                                             raise  # Re-raise to skip to generic greeting
 
                                         # Fetch appointment details for contextualized greeting
+                                        from app.models.appointment import Appointment
+                                        from app.models.customer import Customer
+                                        from app.models.vehicle import Vehicle
                                         from app.tools.crm_tools import get_appointment_details
                                         from sqlalchemy import select
-                                        from app.models.appointment import Appointment
-                                        from app.models.vehicle import Vehicle
-                                        from app.models.customer import Customer
 
                                         # Query appointment with vehicle and customer
                                         result = await db.execute(
@@ -546,8 +596,12 @@ async def handle_media_stream(websocket: WebSocket):
                                             appointment, vehicle, customer = row
 
                                             # Format scheduled date/time
-                                            appt_date = appointment.scheduled_at.strftime("%A, %B %d")
-                                            appt_time = appointment.scheduled_at.strftime("%I:%M %p").lstrip("0")
+                                            appt_date = appointment.scheduled_at.strftime(
+                                                "%A, %B %d"
+                                            )
+                                            appt_time = appointment.scheduled_at.strftime(
+                                                "%I:%M %p"
+                                            ).lstrip("0")
 
                                             # Create contextualized greeting
                                             initial_message = (
@@ -556,11 +610,17 @@ async def handle_media_stream(websocket: WebSocket):
                                                 f"appointment for your {vehicle.year} {vehicle.make} {vehicle.model} "
                                                 f"scheduled for {appt_date} at {appt_time}. Is this a good time to talk?"
                                             )
-                                            logger.info(f"Generated contextualized greeting for appointment {appt_id}")
+                                            logger.info(
+                                                f"Generated contextualized greeting for appointment {appt_id}"
+                                            )
                                         else:
-                                            logger.warning(f"Appointment {appt_id} not found, using generic greeting")
+                                            logger.warning(
+                                                f"Appointment {appt_id} not found, using generic greeting"
+                                            )
                                     except Exception as e:
-                                        logger.warning(f"Could not fetch appointment details: {e}, using generic greeting")
+                                        logger.warning(
+                                            f"Could not fetch appointment details: {e}, using generic greeting"
+                                        )
 
                                 # Add initial greeting to conversation history so context is maintained
                                 openai.add_assistant_message(initial_message)
@@ -573,21 +633,25 @@ async def handle_media_stream(websocket: WebSocket):
 
                                         # Send to Twilio with mark tracking
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "media",
-                                                "streamSid": stream_sid,
-                                                "media": {"payload": audio_b64},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "media",
+                                                    "streamSid": stream_sid,
+                                                    "media": {"payload": audio_b64},
+                                                }
+                                            )
                                         )
 
                                         # Send mark event immediately after media (call-gpt pattern)
                                         mark_label = str(uuid.uuid4())
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "mark",
-                                                "streamSid": stream_sid,
-                                                "mark": {"name": mark_label},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "mark",
+                                                    "streamSid": stream_sid,
+                                                    "mark": {"name": mark_label},
+                                                }
+                                            )
                                         )
                                         marks.append(mark_label)
 
@@ -603,6 +667,7 @@ async def handle_media_stream(websocket: WebSocket):
                                 if caller_phone:
                                     try:
                                         from app.tools.crm_tools import lookup_customer
+
                                         customer = await lookup_customer(db, caller_phone)
                                         if customer:
                                             initial_message = f"Hello {customer['first_name']}! This is Sophie from Otto's Auto. How can I help you today?"
@@ -624,21 +689,25 @@ async def handle_media_stream(websocket: WebSocket):
 
                                         # Send to Twilio with mark tracking
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "media",
-                                                "streamSid": stream_sid,
-                                                "media": {"payload": audio_b64},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "media",
+                                                    "streamSid": stream_sid,
+                                                    "media": {"payload": audio_b64},
+                                                }
+                                            )
                                         )
 
                                         # Send mark event immediately after media (call-gpt pattern)
                                         mark_label = str(uuid.uuid4())
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "mark",
-                                                "streamSid": stream_sid,
-                                                "mark": {"name": mark_label},
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "mark",
+                                                    "streamSid": stream_sid,
+                                                    "mark": {"name": mark_label},
+                                                }
+                                            )
                                         )
                                         marks.append(mark_label)
 
@@ -667,7 +736,9 @@ async def handle_media_stream(websocket: WebSocket):
                         mark_name = data["mark"].get("name")
                         if mark_name in marks:
                             marks.remove(mark_name)
-                            logger.debug(f"Mark completed and removed: {mark_name} ({len(marks)} remaining)")
+                            logger.debug(
+                                f"Mark completed and removed: {mark_name} ({len(marks)} remaining)"
+                            )
                         else:
                             logger.debug(f"Mark received but not tracked: {mark_name}")
 
@@ -726,7 +797,9 @@ async def handle_media_stream(websocket: WebSocket):
                     # call-gpt pattern: Only trigger if audio is actively playing (marks.length > 0) AND text is substantial (> 5 chars)
                     if transcript_type == "interim":
                         if len(marks) > 0 and len(transcript_text) > 5:
-                            logger.info(f"BARGE-IN DETECTED: User spoke while audio playing (marks={len(marks)}): '{transcript_text}'")
+                            logger.info(
+                                f"BARGE-IN DETECTED: User spoke while audio playing (marks={len(marks)}): '{transcript_text}'"
+                            )
 
                             # Clear Twilio audio playback immediately
                             await websocket.send_text(
@@ -775,8 +848,7 @@ async def handle_media_stream(websocket: WebSocket):
                                     try:
                                         # Wait for audio with timeout
                                         audio_chunk = await asyncio.wait_for(
-                                            tts.audio_queue.get(),
-                                            timeout=0.5  # 500ms timeout
+                                            tts.audio_queue.get(), timeout=0.5  # 500ms timeout
                                         )
 
                                         chunks_sent += 1
@@ -787,13 +859,17 @@ async def handle_media_stream(websocket: WebSocket):
 
                                         # Send audio to Twilio (base64 encode mulaw)
                                         await websocket.send_text(
-                                            json.dumps({
-                                                "event": "media",
-                                                "streamSid": stream_sid,
-                                                "media": {
-                                                    "payload": base64.b64encode(audio_chunk).decode("utf-8")
-                                                },
-                                            })
+                                            json.dumps(
+                                                {
+                                                    "event": "media",
+                                                    "streamSid": stream_sid,
+                                                    "media": {
+                                                        "payload": base64.b64encode(
+                                                            audio_chunk
+                                                        ).decode("utf-8")
+                                                    },
+                                                }
+                                            )
                                         )
 
                                         # Send mark only every 10 chunks to reduce overhead (prevents choppy audio)
@@ -801,16 +877,22 @@ async def handle_media_stream(websocket: WebSocket):
                                         if chunks_sent % 10 == 1:  # Chunks 1, 11, 21, 31...
                                             mark_label = str(uuid.uuid4())
                                             await websocket.send_text(
-                                                json.dumps({
-                                                    "event": "mark",
-                                                    "streamSid": stream_sid,
-                                                    "mark": {"name": mark_label},
-                                                })
+                                                json.dumps(
+                                                    {
+                                                        "event": "mark",
+                                                        "streamSid": stream_sid,
+                                                        "mark": {"name": mark_label},
+                                                    }
+                                                )
                                             )
                                             marks.append(mark_label)
-                                            logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} with mark {mark_label}")
+                                            logger.debug(
+                                                f"[VOICE] Sent audio chunk {chunks_sent} with mark {mark_label}"
+                                            )
                                         else:
-                                            logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} (no mark)")
+                                            logger.debug(
+                                                f"[VOICE] Sent audio chunk {chunks_sent} (no mark)"
+                                            )
 
                                     except asyncio.TimeoutError:
                                         # No audio for 500ms, check if we're still speaking
@@ -821,7 +903,9 @@ async def handle_media_stream(websocket: WebSocket):
                             except Exception as e:
                                 logger.error(f"[VOICE] Error streaming audio to Twilio: {e}")
                             finally:
-                                logger.info(f"[VOICE] Finished streaming {chunks_sent} audio chunks to Twilio")
+                                logger.info(
+                                    f"[VOICE] Finished streaming {chunks_sent} audio chunks to Twilio"
+                                )
 
                         # Start audio streaming task
                         audio_task = asyncio.create_task(stream_audio_to_twilio())
@@ -859,10 +943,14 @@ async def handle_media_stream(websocket: WebSocket):
                                     # Add a space at the end to prevent word mashing between chunks
                                     # This ensures TTS properly separates words like "call us" instead of "callus"
                                     text_to_send = stripped_buffer
-                                    if not text_to_send.endswith((' ', '.', '!', '?', ':', ';', ',')):
-                                        text_to_send += ' '
+                                    if not text_to_send.endswith(
+                                        (" ", ".", "!", "?", ":", ";", ",")
+                                    ):
+                                        text_to_send += " "
 
-                                    logger.info(f"[VOICE] Sending to TTS ({word_count} words): '{stripped_buffer[:100]}...'")
+                                    logger.info(
+                                        f"[VOICE] Sending to TTS ({word_count} words): '{stripped_buffer[:100]}...'"
+                                    )
                                     await tts.send_text(text_to_send)
                                     sentence_buffer = ""
 
@@ -881,7 +969,9 @@ async def handle_media_stream(websocket: WebSocket):
                                     "get_available_timeslots": "Let me check available times...",
                                 }
 
-                                feedback_message = tool_feedback_map.get(tool_name, "Just a moment...")
+                                feedback_message = tool_feedback_map.get(
+                                    tool_name, "Just a moment..."
+                                )
 
                                 # Send feedback immediately to TTS (add space to prevent word mashing)
                                 logger.info(f"[VOICE] Sending tool feedback: '{feedback_message}'")
@@ -902,15 +992,19 @@ async def handle_media_stream(websocket: WebSocket):
 
                             elif event["type"] == "done":
                                 # Response generation complete
-                                logger.info(f"[VOICE] ===== ASSISTANT RESPONSE: {response_text} =====")
+                                logger.info(
+                                    f"[VOICE] ===== ASSISTANT RESPONSE: {response_text} ====="
+                                )
 
                                 # Send any remaining text to TTS
                                 if sentence_buffer.strip():
                                     # Ensure final buffer has proper ending (space or punctuation)
                                     final_text = sentence_buffer.strip()
-                                    if not final_text.endswith((' ', '.', '!', '?', ':', ';', ',')):
-                                        final_text += ' '
-                                    logger.info(f"[VOICE] Sending final text to TTS: '{final_text}'")
+                                    if not final_text.endswith((" ", ".", "!", "?", ":", ";", ",")):
+                                        final_text += " "
+                                    logger.info(
+                                        f"[VOICE] Sending final text to TTS: '{final_text}'"
+                                    )
                                     await tts.send_text(final_text)
 
                                 # Flush TTS to finalize audio generation
@@ -930,9 +1024,17 @@ async def handle_media_stream(websocket: WebSocket):
                         # More lenient detection - trigger on goodbye phrases in last 50% of response
                         response_lower = response_text.lower()
                         goodbye_phrases = [
-                            "goodbye", "bye bye", "bye", "thank you, goodbye", "thanks, goodbye",
-                            "have a good day", "talk to you later", "see you later",
-                            "have a great day", "take care", "goodbye!"
+                            "goodbye",
+                            "bye bye",
+                            "bye",
+                            "thank you, goodbye",
+                            "thanks, goodbye",
+                            "have a good day",
+                            "talk to you later",
+                            "see you later",
+                            "have a great day",
+                            "take care",
+                            "goodbye!",
                         ]
 
                         # Trigger if goodbye is in the last 50% of the response (lowered from 70%)
@@ -942,14 +1044,22 @@ async def handle_media_stream(websocket: WebSocket):
                             phrase_pos = response_lower.rfind(phrase)
                             if phrase_pos >= 0:
                                 # Check if phrase is in last 50% of response
-                                relative_pos = phrase_pos / len(response_lower) if len(response_lower) > 0 else 0
+                                relative_pos = (
+                                    phrase_pos / len(response_lower)
+                                    if len(response_lower) > 0
+                                    else 0
+                                )
                                 if relative_pos >= 0.5:
                                     trigger_hangup = True
-                                    logger.info(f"[VOICE] Goodbye phrase '{phrase}' detected at position {relative_pos:.1%}")
+                                    logger.info(
+                                        f"[VOICE] Goodbye phrase '{phrase}' detected at position {relative_pos:.1%}"
+                                    )
                                     break
 
                         if trigger_hangup:
-                            logger.info(f"[VOICE] Goodbye detected - waiting for audio to finish playing ({len(marks)} marks remaining)")
+                            logger.info(
+                                f"[VOICE] Goodbye detected - waiting for audio to finish playing ({len(marks)} marks remaining)"
+                            )
 
                             # Wait for all audio marks to clear (audio finished playing)
                             max_wait = 30  # Maximum 30 seconds to wait
@@ -957,20 +1067,21 @@ async def handle_media_stream(websocket: WebSocket):
                             while len(marks) > 0 and (time.time() - wait_start) < max_wait:
                                 await asyncio.sleep(0.1)
                                 if len(marks) > 0:
-                                    logger.debug(f"[VOICE] Waiting for {len(marks)} marks to clear...")
+                                    logger.debug(
+                                        f"[VOICE] Waiting for {len(marks)} marks to clear..."
+                                    )
 
                             if len(marks) > 0:
-                                logger.warning(f"[VOICE] Timeout waiting for marks to clear ({len(marks)} remaining)")
+                                logger.warning(
+                                    f"[VOICE] Timeout waiting for marks to clear ({len(marks)} remaining)"
+                                )
                             else:
                                 logger.info(f"[VOICE] All audio finished playing, terminating call")
 
                             # Send hangup event to Twilio (clears audio queue)
                             try:
                                 await websocket.send_text(
-                                    json.dumps({
-                                        "event": "hangup",
-                                        "streamSid": stream_sid
-                                    })
+                                    json.dumps({"event": "hangup", "streamSid": stream_sid})
                                 )
                                 logger.info(f"[VOICE] Hangup event sent to Twilio")
                             except Exception as e:
@@ -980,13 +1091,16 @@ async def handle_media_stream(websocket: WebSocket):
                             if call_sid:
                                 try:
                                     twilio_client = TwilioClient(
-                                        settings.TWILIO_ACCOUNT_SID,
-                                        settings.TWILIO_AUTH_TOKEN
+                                        settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN
                                     )
-                                    twilio_client.calls(call_sid).update(status='completed')
-                                    logger.info(f"[VOICE] Call {call_sid} terminated via Twilio API")
+                                    twilio_client.calls(call_sid).update(status="completed")
+                                    logger.info(
+                                        f"[VOICE] Call {call_sid} terminated via Twilio API"
+                                    )
                                 except Exception as e:
-                                    logger.error(f"[VOICE] Failed to terminate call via Twilio API: {e}")
+                                    logger.error(
+                                        f"[VOICE] Failed to terminate call via Twilio API: {e}"
+                                    )
 
                             # Exit the transcript processing loop
                             break
@@ -1061,20 +1175,24 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 # Send audio with mark tracking
                                 await websocket.send_text(
-                                    json.dumps({
-                                        "event": "media",
-                                        "streamSid": stream_sid,
-                                        "media": {"payload": audio_b64},
-                                    })
+                                    json.dumps(
+                                        {
+                                            "event": "media",
+                                            "streamSid": stream_sid,
+                                            "media": {"payload": audio_b64},
+                                        }
+                                    )
                                 )
 
                                 mark_label = str(uuid.uuid4())
                                 await websocket.send_text(
-                                    json.dumps({
-                                        "event": "mark",
-                                        "streamSid": stream_sid,
-                                        "mark": {"name": mark_label},
-                                    })
+                                    json.dumps(
+                                        {
+                                            "event": "mark",
+                                            "streamSid": stream_sid,
+                                            "mark": {"name": mark_label},
+                                        }
+                                    )
                                 )
                                 marks.append(mark_label)
 
@@ -1103,10 +1221,9 @@ async def handle_media_stream(websocket: WebSocket):
                         if call_sid:
                             try:
                                 twilio_client = TwilioClient(
-                                    settings.TWILIO_ACCOUNT_SID,
-                                    settings.TWILIO_AUTH_TOKEN
+                                    settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN
                                 )
-                                twilio_client.calls(call_sid).update(status='completed')
+                                twilio_client.calls(call_sid).update(status="completed")
                                 logger.info(f"[SILENCE DETECTION] Call {call_sid} terminated")
                             except Exception as e:
                                 logger.error(f"[SILENCE DETECTION] Failed to terminate call: {e}")
@@ -1120,11 +1237,7 @@ async def handle_media_stream(websocket: WebSocket):
 
         # Run three tasks concurrently using asyncio.gather
         logger.info("Starting concurrent tasks (receive + process + silence monitoring)")
-        await asyncio.gather(
-            receive_from_twilio(),
-            process_transcripts(),
-            monitor_silence()
-        )
+        await asyncio.gather(receive_from_twilio(), process_transcripts(), monitor_silence())
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected by client")
@@ -1145,9 +1258,7 @@ async def handle_media_stream(websocket: WebSocket):
         try:
             if websocket and stream_sid:
                 # Clear any pending audio
-                await websocket.send_text(
-                    json.dumps({"event": "clear", "streamSid": stream_sid})
-                )
+                await websocket.send_text(json.dumps({"event": "clear", "streamSid": stream_sid}))
 
                 # Note: We cannot easily send TTS audio here since services may be broken
                 # In production, consider having a pre-recorded error message

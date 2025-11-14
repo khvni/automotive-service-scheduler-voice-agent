@@ -19,7 +19,7 @@
 ### System Requirements
 - **Python:** 3.11 or higher
 - **Database:** PostgreSQL 14+ (Neon Serverless recommended)
-- **Cache:** Redis 6.0+ 
+- **Cache:** Redis 6.0+
 - **OS:** Linux (Ubuntu 22.04 LTS recommended) or macOS for development
 - **Memory:** Minimum 2GB RAM per server instance
 - **CPU:** Minimum 2 cores recommended
@@ -148,7 +148,7 @@ echo ".env" >> .gitignore
    # Ubuntu
    sudo apt update
    sudo apt install postgresql postgresql-contrib
-   
+
    # macOS
    brew install postgresql@14
    brew services start postgresql@14
@@ -228,7 +228,7 @@ REDIS_URL=redis://default:password@host.cloud.redislabs.com:port
    sudo apt install redis-server
    sudo systemctl enable redis-server
    sudo systemctl start redis-server
-   
+
    # macOS
    brew install redis
    brew services start redis
@@ -635,7 +635,7 @@ Create custom dashboard with key metrics:
    server {
        listen 443 ssl http2;
        server_name yourdomain.com;
-       
+
        location / {
            proxy_pass http://automotive_voice;
        }
@@ -761,9 +761,9 @@ tcp-keepalive 60
 **4. High Latency**
 ```bash
 # Check database query performance
-SELECT query, mean_exec_time, calls 
-FROM pg_stat_statements 
-ORDER BY mean_exec_time DESC 
+SELECT query, mean_exec_time, calls
+FROM pg_stat_statements
+ORDER BY mean_exec_time DESC
 LIMIT 10;
 
 # Check Redis latency

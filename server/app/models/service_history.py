@@ -38,4 +38,7 @@ class ServiceHistory(Base, TimestampMixin):
     vehicle = relationship("Vehicle", back_populates="service_history")
 
     def __repr__(self):
-        return f"<ServiceHistory(id={self.id}, vehicle_id={self.vehicle_id}, service_date='{self.service_date}')>"
+        return (
+            f"<ServiceHistory(id={self.id}, vehicle_id={self.vehicle_id}, "
+            f"service_date='{self.service_date}')>"
+        )

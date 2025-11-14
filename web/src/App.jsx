@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react'
-import './App.css'
+import React, { useState, useEffect } from "react";
+import "./App.css";
 
 function App() {
-  const [healthStatus, setHealthStatus] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [healthStatus, setHealthStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/v1/health')
-      .then(res => res.json())
-      .then(data => {
-        setHealthStatus(data)
-        setLoading(false)
+    fetch("/api/v1/health")
+      .then((res) => res.json())
+      .then((data) => {
+        setHealthStatus(data);
+        setLoading(false);
       })
-      .catch(err => {
-        console.error('Failed to fetch health status:', err)
-        setLoading(false)
-      })
-  }, [])
+      .catch((err) => {
+        console.error("Failed to fetch health status:", err);
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <div className="App">
@@ -71,7 +71,7 @@ function App() {
         </section>
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

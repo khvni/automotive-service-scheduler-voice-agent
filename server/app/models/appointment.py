@@ -107,4 +107,7 @@ class Appointment(Base, TimestampMixin):
     vehicle = relationship("Vehicle", back_populates="appointments")
 
     def __repr__(self):
-        return f"<Appointment(id={self.id}, customer_id={self.customer_id}, scheduled_at='{self.scheduled_at}', status='{self.status}')>"
+        return (
+            f"<Appointment(id={self.id}, customer_id={self.customer_id}, "
+            f"scheduled_at='{self.scheduled_at}', status='{self.status}')>"
+        )

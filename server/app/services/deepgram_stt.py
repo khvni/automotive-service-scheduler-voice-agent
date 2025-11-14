@@ -85,7 +85,7 @@ class DeepgramSTTService:
             self._attempt_connection,
             max_retries=max_retries,
             backoff_factor=backoff_factor,
-            operation_name="Deepgram STT Connection"
+            operation_name="Deepgram STT Connection",
         )
 
     async def _attempt_connection(self) -> None:

@@ -12,9 +12,9 @@ import time
 from typing import Optional
 
 import websockets
+from app.utils.retry import with_retry
 from websockets.exceptions import WebSocketException
 
-from app.utils.retry import with_retry
 from .tts_interface import TTSInterface
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class DeepgramTTSService(TTSInterface):
             self._attempt_connection,
             max_retries=max_retries,
             backoff_factor=backoff_factor,
-            operation_name="Deepgram TTS Connection"
+            operation_name="Deepgram TTS Connection",
         )
 
     async def _attempt_connection(self) -> None:

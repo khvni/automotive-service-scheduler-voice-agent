@@ -120,7 +120,9 @@ async def status_callback(request: Request):
     call_status = form_data.get("CallStatus")
     call_duration = form_data.get("CallDuration")
 
-    logger.info(f"Call status update - SID: {call_sid}, Status: {call_status}, Duration: {call_duration}s")
+    logger.info(
+        f"Call status update - SID: {call_sid}, Status: {call_status}, Duration: {call_duration}s"
+    )
 
     # Update call log in database
     # Send to monitoring/analytics
