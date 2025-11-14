@@ -155,6 +155,16 @@ if [ -f ".env" ]; then
     fi
 fi
 
+# Auto-update Twilio webhook for inbound calls
+echo -e "${YELLOW}  Updating Twilio webhook for inbound calls...${NC}"
+venv-new/bin/python scripts/update_twilio_webhook.py "$NGROK_URL"
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ Twilio webhook configured${NC}"
+else
+    echo -e "${RED}✗ Failed to update Twilio webhook${NC}"
+    echo -e "${YELLOW}  Inbound calls may not work. Check Twilio credentials in .env${NC}"
+fi
+
 echo ""
 
 # Step 5: Start FastAPI server
