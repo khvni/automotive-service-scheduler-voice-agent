@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Constants
-BARGE_IN_WORD_THRESHOLD = 3  # Minimum words to trigger barge-in (prevents "uh", "um" false positives)
+BARGE_IN_WORD_THRESHOLD = 1  # Minimum words to trigger barge-in (responsive interruption)
 
 
 # System prompt for the AI assistant

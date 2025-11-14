@@ -56,8 +56,8 @@ class DeepgramSTTService:
             interim_results=True,  # CRITICAL: enables barge-in detection
             no_delay=True,  # Minimize latency
             # End-of-speech detection
-            endpointing=300,  # ms of silence to detect end of utterance
-            utterance_end_ms=1000,  # ms to finalize utterance
+            endpointing=200,  # ms of silence to detect end of utterance (was 300)
+            utterance_end_ms=800,  # ms to finalize utterance (was 1000)
         )
 
         logger.info("DeepgramSTTService initialized with nova-2-phonecall model")
