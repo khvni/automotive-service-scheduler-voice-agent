@@ -20,6 +20,8 @@ from app.services.openai_service import OpenAIService
 from app.services.redis_client import get_session, set_session, update_session
 from app.services.tool_definitions import TOOL_SCHEMAS
 from app.services.tool_router import ToolRouter
+from app.utils.audio_buffer import AudioBuffer
+from app.utils.performance_metrics import PerformanceMetrics
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -188,6 +190,10 @@ async def handle_media_stream(websocket: WebSocket):
     openai: Optional[OpenAIService] = None
     db: Optional[AsyncSession] = None
 
+    # Utilities
+    audio_buffer: Optional[AudioBuffer] = None
+    metrics: Optional[PerformanceMetrics] = None
+
     try:
         # Initialize services
         logger.info("Initializing services (STT, TTS, OpenAI)")
@@ -197,6 +203,10 @@ async def handle_media_stream(websocket: WebSocket):
         openai = OpenAIService(
             api_key=settings.OPENAI_API_KEY, model="gpt-4o", temperature=0.8, max_tokens=1000
         )
+
+        # Initialize utilities
+        audio_buffer = AudioBuffer(buffer_size=3200)  # Optimal for mulaw @ 8kHz
+        metrics = PerformanceMetrics()
 
         # Connect to STT and TTS
         await stt.connect()
@@ -312,9 +322,14 @@ async def handle_media_stream(websocket: WebSocket):
                         audio_payload = data["media"]["payload"]
                         audio_bytes = base64.b64decode(audio_payload)
 
-                        # Validate audio before sending (prevent Deepgram disconnections from empty packets)
+                        # Validate audio before buffering
                         if audio_bytes and len(audio_bytes) > 0:
-                            await stt.send_audio(audio_bytes)
+                            # Add to buffer and get complete chunks
+                            buffered_chunks = audio_buffer.add(audio_bytes)
+
+                            # Send buffered chunks to STT
+                            for chunk in buffered_chunks:
+                                await stt.send_audio(chunk)
                         else:
                             logger.debug("Skipped empty audio packet")
 
@@ -377,20 +392,26 @@ async def handle_media_stream(websocket: WebSocket):
                     # Handle interim results (barge-in detection)
                     if transcript_type == "interim":
                         if is_speaking:
-                            logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking")
+                            # Debounce: Only trigger barge-in if transcript has 3+ words
+                            # This prevents false positives from "uh", "um", background noise
+                            word_count = len(transcript_text.split())
+                            if word_count >= 3:
+                                logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking ({word_count} words)")
 
-                            # Clear Twilio audio playback immediately
-                            await websocket.send_text(
-                                json.dumps({"event": "clear", "streamSid": stream_sid})
-                            )
+                                # Clear Twilio audio playback immediately
+                                await websocket.send_text(
+                                    json.dumps({"event": "clear", "streamSid": stream_sid})
+                                )
 
-                            # Clear TTS audio queue
-                            await tts.clear()
+                                # Clear TTS audio queue
+                                await tts.clear()
 
-                            # Stop speaking flag
-                            is_speaking = False
+                                # Stop speaking flag
+                                is_speaking = False
 
-                            logger.info("Audio cleared for barge-in")
+                                logger.info("Audio cleared for barge-in")
+                            else:
+                                logger.debug(f"Ignoring interim with {word_count} words (threshold: 3)")
 
                     # Handle final transcripts (complete utterances)
                     elif transcript_type == "final" and transcript_data.get("speech_final"):
@@ -405,6 +426,8 @@ async def handle_media_stream(websocket: WebSocket):
                         response_text = ""
                         sentence_buffer = ""
 
+                        # Start tracking LLM latency
+                        metrics.start_llm()
                         logger.info("[VOICE] Calling OpenAI to generate response...")
 
                         # Create task to stream audio to Twilio in parallel
@@ -421,6 +444,10 @@ async def handle_media_stream(websocket: WebSocket):
                                         )
 
                                         chunks_sent += 1
+
+                                        # Track TTS first byte
+                                        if chunks_sent == 1:
+                                            metrics.record_tts_first_byte()
 
                                         # Send audio to Twilio (base64 encode mulaw)
                                         await websocket.send_text(
@@ -449,20 +476,31 @@ async def handle_media_stream(websocket: WebSocket):
                         audio_task = asyncio.create_task(stream_audio_to_twilio())
 
                         # Stream LLM response and send to TTS incrementally
+                        first_token_tracked = False
                         async for event in openai.generate_response(stream=True):
                             if event["type"] == "content_delta":
+                                # Track first token latency
+                                if not first_token_tracked:
+                                    metrics.record_llm_first_token()
+                                    first_token_tracked = True
+
                                 # Accumulate chunks and send sentences as they complete
                                 chunk = event["text"]
                                 response_text += chunk
                                 sentence_buffer += chunk
                                 logger.debug(f"[VOICE] Got OpenAI chunk: '{chunk}'")
 
-                                # Send to TTS when we have a complete sentence or phrase
-                                if any(p in chunk for p in [".", "!", "?", "\n", ":"]):
-                                    if sentence_buffer.strip():
-                                        logger.info(f"[VOICE] Sending to TTS: '{sentence_buffer[:100]}...'")
-                                        await tts.send_text(sentence_buffer)
-                                        sentence_buffer = ""
+                                # Enhanced sentence detection: Check if buffer ENDS with punctuation
+                                # This ensures we send complete thoughts, not mid-sentence
+                                if sentence_buffer.strip() and sentence_buffer.rstrip()[-1:] in ".!?:;":
+                                    logger.info(f"[VOICE] Sending to TTS: '{sentence_buffer[:100]}...'")
+
+                                    # Start tracking TTS latency before first send
+                                    if not metrics.tts_start_time:
+                                        metrics.start_tts()
+
+                                    await tts.send_text(sentence_buffer.strip())
+                                    sentence_buffer = ""
 
                             elif event["type"] == "tool_call":
                                 # Tool is being executed (logged by OpenAI service)
@@ -500,6 +538,16 @@ async def handle_media_stream(websocket: WebSocket):
 
                         # Wait for audio streaming to complete
                         await audio_task
+
+                        # Log performance metrics
+                        perf_data = metrics.get_metrics()
+                        logger.info(
+                            f"[PERFORMANCE] LLM TTFT: {perf_data.get('llm_first_token_ms', 'N/A')}ms | "
+                            f"TTS TTFB: {perf_data.get('tts_first_byte_ms', 'N/A')}ms"
+                        )
+
+                        # Reset metrics for next turn
+                        metrics.reset()
 
                         # Update session in Redis with conversation history
                         if call_sid:
