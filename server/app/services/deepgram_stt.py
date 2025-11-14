@@ -54,9 +54,10 @@ class DeepgramSTTService:
             channels=1,
             # Real-time features
             interim_results=True,  # CRITICAL: enables barge-in detection
-            # End-of-speech detection
-            endpointing=300,  # ms of silence to detect end of utterance
-            utterance_end_ms=1000,  # ms to finalize utterance
+            no_delay=True,  # CRITICAL: minimize latency for real-time responsiveness
+            # End-of-speech detection (tuned for natural conversation flow)
+            endpointing=200,  # ms of silence to detect end of utterance (reduced for faster interruption)
+            utterance_end_ms=1200,  # ms to finalize utterance (increased to prevent cutting off user)
         )
 
         logger.info("DeepgramSTTService initialized with nova-2-phonecall model")

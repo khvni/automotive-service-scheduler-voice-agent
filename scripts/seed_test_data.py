@@ -34,6 +34,11 @@ async def seed_data():
     """Seed the database with test data."""
     print("🌱 Seeding test data...")
 
+    # Suppress SQLAlchemy logging during seed to reduce noise
+    import logging
+    logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    logging.getLogger('sqlalchemy.pool').setLevel(logging.WARNING)
+
     # Initialize database
     from app.services.database import init_db
     await init_db()
@@ -44,7 +49,7 @@ async def seed_data():
 
     try:
         # Check if data already exists
-        result = await db.execute(select(Customer).where(Customer.first_name == "John"))
+        result = await db.execute(select(Customer).where(Customer.first_name == "Ali"))
         existing = result.scalar_one_or_none()
 
         if existing:
@@ -54,12 +59,12 @@ async def seed_data():
 
         print("\n📋 Creating test customers...")
 
-        # Customer 1: John Smith (the classic 2001 Honda Odyssey owner)
+        # Customer 1: Ali Khani (the classic 2001 Honda Odyssey owner)
         customer1 = Customer(
-            phone_number=settings.YOUR_TEST_NUMBER,  # Use YOUR_TEST_NUMBER for easy testing
-            email="john.smith@example.com",
-            first_name="John",
-            last_name="Smith",
+            phone_number="+14086137788",  # Ali's test number
+            email="ali.khani@example.com",
+            first_name="Ali",
+            last_name="Khani",
             street_address="123 Main Street",
             city="Austin",
             state="TX",
@@ -73,7 +78,7 @@ async def seed_data():
         db.add(customer1)
         await db.flush()  # Get customer1.id
 
-        # John's vehicles
+        # Ali's vehicles
         vehicle1 = Vehicle(
             customer_id=customer1.id,
             vin="JH4DB7560SS000123",
@@ -91,7 +96,7 @@ async def seed_data():
         db.add(vehicle1)
         await db.flush()
 
-        # Upcoming oil change appointment for John
+        # Upcoming oil change appointment for Ali
         appointment1 = Appointment(
             customer_id=customer1.id,
             vehicle_id=vehicle1.id,
@@ -106,7 +111,7 @@ async def seed_data():
         )
         db.add(appointment1)
 
-        print(f"✓ Created customer: {customer1.first_name} {customer1.last_name}")
+        print(f"✓ Created customer: {customer1.first_name} {customer1.last_name} ({customer1.phone_number})")
         print(f"  - Vehicle: {vehicle1.year} {vehicle1.make} {vehicle1.model}")
         print(f"  - Appointment: {appointment1.service_type.value} on {appointment1.scheduled_at}")
 
@@ -268,7 +273,7 @@ async def seed_data():
         print(f"   - 5 vehicles created")
         print(f"   - 3 upcoming appointments created")
         print(f"\n💡 Test by calling:")
-        print(f"   - Your number ({settings.YOUR_TEST_NUMBER}) for John Smith's 2001 Honda Odyssey")
+        print(f"   - Your number (+14086137788) for Ali Khani's 2001 Honda Odyssey")
         print(f"   - Run outbound test to get appointment reminder call")
 
     except Exception as e:

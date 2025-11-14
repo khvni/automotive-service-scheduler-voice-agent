@@ -30,8 +30,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Constants
-BARGE_IN_WORD_THRESHOLD = 1  # Minimum words to trigger barge-in (responsive interruption)
+# Constants (removed BARGE_IN_WORD_THRESHOLD - now triggers on ANY interim result for instant interruption)
 
 
 # System prompt for the AI assistant
@@ -519,31 +518,26 @@ async def handle_media_stream(websocket: WebSocket):
                         continue
 
                     # Handle interim results (barge-in detection)
+                    # Reference: Deepgram's implementation triggers on ANY interim while speaking
                     if transcript_type == "interim":
                         if is_speaking:
-                            # Debounce: Only trigger barge-in if transcript has enough words
-                            # This prevents false positives from "uh", "um", background noise
-                            word_count = len(transcript_text.split())
-                            if word_count >= BARGE_IN_WORD_THRESHOLD:
-                                logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking ({word_count} words)")
+                            logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking: '{transcript_text}'")
 
-                                # Clear Twilio audio playback immediately
-                                await websocket.send_text(
-                                    json.dumps({"event": "clear", "streamSid": stream_sid})
-                                )
+                            # Clear Twilio audio playback immediately
+                            await websocket.send_text(
+                                json.dumps({"event": "clear", "streamSid": stream_sid})
+                            )
 
-                                # Clear TTS audio queue
-                                await tts.clear()
+                            # Clear TTS audio queue
+                            await tts.clear()
 
-                                # Clear audio buffer to prevent buffered audio from being sent
-                                audio_buffer.clear()
+                            # Clear audio buffer to prevent buffered audio from being sent
+                            audio_buffer.clear()
 
-                                # Stop speaking flag
-                                is_speaking = False
+                            # Stop speaking flag
+                            is_speaking = False
 
-                                logger.info("Audio cleared for barge-in")
-                            else:
-                                logger.debug(f"Ignoring interim with {word_count} words (threshold: {BARGE_IN_WORD_THRESHOLD})")
+                            logger.info("Audio cleared for barge-in")
 
                     # Handle final transcripts (complete utterances)
                     elif transcript_type == "final" and transcript_data.get("speech_final"):
@@ -616,17 +610,28 @@ async def handle_media_stream(websocket: WebSocket):
                                     metrics.track_llm_first_token()
                                     first_token_tracked = True
 
-                                # Accumulate chunks and send sentences as they complete
+                                # Accumulate chunks and send to TTS with optimized buffering
+                                # Reference: Deepgram implementation sends chunks immediately for low latency
                                 chunk = event["text"]
                                 response_text += chunk
                                 sentence_buffer += chunk
                                 logger.debug(f"[VOICE] Got OpenAI chunk: '{chunk}'")
 
-                                # Enhanced sentence detection: Check if buffer ENDS with punctuation
-                                # This ensures we send complete thoughts, not mid-sentence
+                                # Send on punctuation OR every 10 words to minimize latency
+                                # This balances natural speech phrasing with responsiveness
                                 stripped_buffer = sentence_buffer.strip()
+                                word_count = len(stripped_buffer.split())
+
+                                should_send = False
                                 if stripped_buffer and stripped_buffer[-1] in ".!?:;":
-                                    logger.info(f"[VOICE] Sending to TTS: '{stripped_buffer[:100]}...'")
+                                    # Send complete sentences
+                                    should_send = True
+                                elif word_count >= 10:
+                                    # Send partial phrases to avoid long delays
+                                    should_send = True
+
+                                if should_send:
+                                    logger.info(f"[VOICE] Sending to TTS ({word_count} words): '{stripped_buffer[:100]}...'")
                                     await tts.send_text(stripped_buffer)
                                     sentence_buffer = ""
 
@@ -668,23 +673,23 @@ async def handle_media_stream(websocket: WebSocket):
                         await audio_task
 
                         # Detect conversation end (goodbye detection)
-                        # Check if goodbye phrase appears near end of response to avoid false positives
+                        # More lenient detection - trigger on goodbye phrases in last 50% of response
                         response_lower = response_text.lower()
                         goodbye_phrases = [
-                            "goodbye", "bye bye", "thank you, goodbye", "thanks, goodbye",
+                            "goodbye", "bye bye", "bye", "thank you, goodbye", "thanks, goodbye",
                             "have a good day", "talk to you later", "see you later",
-                            "have a great day", "take care"
+                            "have a great day", "take care", "goodbye!"
                         ]
 
-                        # Only trigger if goodbye is in the last 30% of the response
-                        # This prevents false positives from phrases like "bye-laws" or mid-conversation "goodbye"
+                        # Trigger if goodbye is in the last 50% of the response (lowered from 70%)
+                        # This ensures we catch shorter goodbyes while avoiding mid-conversation false positives
                         trigger_hangup = False
                         for phrase in goodbye_phrases:
                             phrase_pos = response_lower.rfind(phrase)
                             if phrase_pos >= 0:
-                                # Check if phrase is in last 30% of response
-                                relative_pos = phrase_pos / len(response_lower)
-                                if relative_pos >= 0.7:
+                                # Check if phrase is in last 50% of response
+                                relative_pos = phrase_pos / len(response_lower) if len(response_lower) > 0 else 0
+                                if relative_pos >= 0.5:
                                     trigger_hangup = True
                                     logger.info(f"[VOICE] Goodbye phrase '{phrase}' detected at position {relative_pos:.1%}")
                                     break

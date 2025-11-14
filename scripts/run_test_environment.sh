@@ -199,7 +199,7 @@ echo ""
 
 # Seed test data (if needed)
 echo -e "${YELLOW}Checking for test data...${NC}"
-venv-new/bin/python scripts/seed_test_data.py
+venv-new/bin/python scripts/seed_test_data.py 2>&1 | grep -v "sqlalchemy\|psycopg" || true
 echo ""
 
 echo -e "${GREEN}========================================${NC}"
