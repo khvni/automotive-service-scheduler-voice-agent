@@ -89,3 +89,8 @@ PRD.md
 
 # Generated markdown files with paths
 YOUR PATH/
+
+# Agent-generated progress tracking
+docs/development-log/
+docs/archive/
+docs/code-reviews/
