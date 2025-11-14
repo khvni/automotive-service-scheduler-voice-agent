@@ -247,7 +247,7 @@ while true; do
             echo ""
             echo -e "${BLUE}Sample Customers You Can Pose As:${NC}"
             echo "  • Ali Khani - Phone: (408) 613-7788"
-            echo "    2001 Honda Odyssey (upcoming oil change)"
+            echo "    2019 Honda CR-V (upcoming oil change)"
             echo ""
             echo "  • Maria Garcia - Phone: (512) 555-1001"
             echo "    2018 Toyota Camry (upcoming brake service)"

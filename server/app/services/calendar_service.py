@@ -8,6 +8,11 @@ This service provides async wrappers around the Google Calendar API for:
 - Canceling/deleting events
 
 Uses OAuth2 refresh token flow for authentication.
+
+Features:
+- Automatic retry with exponential backoff for transient errors
+- Performance metrics tracking for all operations
+- Health monitoring and alerting
 """
 
 import asyncio
@@ -16,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+from app.utils.calendar_metrics import CalendarOperationMetrics, get_metrics_tracker
+from app.utils.retry import with_retry
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -112,6 +119,8 @@ class CalendarService:
         the calendar is available. It then calculates free slots that are
         at least `duration_minutes` long, excluding lunch hours (12-1 PM).
 
+        Includes automatic retry for transient errors and performance tracking.
+
         Args:
             start_time: Start of availability window (timezone-aware)
             end_time: End of availability window (timezone-aware)
@@ -125,49 +134,72 @@ class CalendarService:
             ]
 
         Raises:
-            Exception: If freebusy query fails
+            Exception: If freebusy query fails after retries
         """
+        # Start metrics tracking
+        metrics_tracker = get_metrics_tracker()
+        metric = metrics_tracker.start_operation("freebusy_query")
+
         try:
-            service = self.get_calendar_service()
+            # Define the operation to retry
+            async def _query_freebusy():
+                service = self.get_calendar_service()
 
-            # Ensure times are timezone-aware
-            if start_time.tzinfo is None:
-                start_time = start_time.replace(tzinfo=self.timezone)
-            if end_time.tzinfo is None:
-                end_time = end_time.replace(tzinfo=self.timezone)
+                # Ensure times are timezone-aware
+                if start_time.tzinfo is None:
+                    _start_time = start_time.replace(tzinfo=self.timezone)
+                else:
+                    _start_time = start_time
 
-            # Convert to UTC for API
-            start_time_utc = start_time.astimezone(timezone.utc)
-            end_time_utc = end_time.astimezone(timezone.utc)
+                if end_time.tzinfo is None:
+                    _end_time = end_time.replace(tzinfo=self.timezone)
+                else:
+                    _end_time = end_time
 
-            logger.info(f"Querying freebusy from {start_time_utc} to {end_time_utc}")
+                # Convert to UTC for API
+                start_time_utc = _start_time.astimezone(timezone.utc)
+                end_time_utc = _end_time.astimezone(timezone.utc)
 
-            body = {
-                "timeMin": start_time_utc.isoformat(),
-                "timeMax": end_time_utc.isoformat(),
-                "items": [{"id": "primary"}],
-            }
+                logger.info(f"Querying freebusy from {start_time_utc} to {end_time_utc}")
 
-            # Run blocking API call in executor
-            freebusy_response = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: service.freebusy().query(body=body).execute()
+                body = {
+                    "timeMin": start_time_utc.isoformat(),
+                    "timeMax": end_time_utc.isoformat(),
+                    "items": [{"id": "primary"}],
+                }
+
+                # Run blocking API call in executor
+                freebusy_response = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: service.freebusy().query(body=body).execute()
+                )
+
+                logger.debug(f"Freebusy response: {freebusy_response}")
+
+                # Process response to calculate free slots
+                free_slots = self._process_freebusy_response(
+                    freebusy_response, _start_time, _end_time, duration_minutes
+                )
+
+                logger.info(f"Found {len(free_slots)} free slots")
+                return free_slots
+
+            # Execute with retry logic (retries on transient errors like 500, 503)
+            result = await with_retry(
+                _query_freebusy,
+                max_retries=3,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+                operation_name="Calendar Freebusy Query",
             )
 
-            logger.debug(f"Freebusy response: {freebusy_response}")
+            metric.mark_success()
+            metrics_tracker.record_operation(metric)
+            return result
 
-            # Process response to calculate free slots
-            free_slots = self._process_freebusy_response(
-                freebusy_response, start_time, end_time, duration_minutes
-            )
-
-            logger.info(f"Found {len(free_slots)} free slots")
-            return free_slots
-
-        except HttpError as e:
-            logger.error(f"Google Calendar API error in get_free_availability: {e}")
-            raise
         except Exception as e:
-            logger.error(f"Error getting free availability: {e}", exc_info=True)
+            metric.mark_failure(e)
+            metrics_tracker.record_operation(metric)
+            logger.error(f"Error getting free availability after retries: {e}", exc_info=True)
             raise
 
     async def create_calendar_event(
