@@ -371,8 +371,14 @@ async def handle_media_stream(websocket: WebSocket):
                                 from app.models.customer import Customer
                                 from sqlalchemy import select
 
-                                # Parse appointment_id
-                                appt_id = int(appointment_id_param)
+                                # Parse appointment_id with validation
+                                try:
+                                    appt_id = int(appointment_id_param)
+                                    if appt_id <= 0:
+                                        raise ValueError("Appointment ID must be positive")
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"Invalid appointment_id '{appointment_id_param}': {e}")
+                                    raise  # Re-raise to skip reminder prompt setup
 
                                 # Query appointment with vehicle and customer
                                 result = await db.execute(

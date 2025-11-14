@@ -246,7 +246,7 @@ while true; do
             venv-new/bin/python scripts/test_voice_calls.py inbound
             echo ""
             echo -e "${BLUE}Sample Customers You Can Pose As:${NC}"
-            echo "  • John Smith - Phone: (512) 555-1000"
+            echo "  • Ali Khani - Phone: (408) 613-7788"
             echo "    2001 Honda Odyssey (upcoming oil change)"
             echo ""
             echo "  • Maria Garcia - Phone: (512) 555-1001"
