@@ -213,6 +213,8 @@ class CalendarService:
         """
         Create a new calendar event.
 
+        Includes automatic retry for transient errors and performance tracking.
+
         Args:
             title: Event summary/title
             start_time: Event start time (timezone-aware)
@@ -232,67 +234,77 @@ class CalendarService:
         Raises:
             Exception: If event creation fails
         """
+        # Start metrics tracking
+        metrics_tracker = get_metrics_tracker()
+        metric = metrics_tracker.start_operation("create_event")
+
         try:
-            service = self.get_calendar_service()
+            async def _create_event():
+                service = self.get_calendar_service()
 
-            # Ensure times are timezone-aware
-            if start_time.tzinfo is None:
-                start_time = start_time.replace(tzinfo=self.timezone)
-            if end_time.tzinfo is None:
-                end_time = end_time.replace(tzinfo=self.timezone)
+                # Ensure times are timezone-aware
+                _start_time = start_time.replace(tzinfo=self.timezone) if start_time.tzinfo is None else start_time
+                _end_time = end_time.replace(tzinfo=self.timezone) if end_time.tzinfo is None else end_time
 
-            # Convert to UTC for API
-            start_time_utc = start_time.astimezone(timezone.utc)
-            end_time_utc = end_time.astimezone(timezone.utc)
+                # Convert to UTC for API
+                start_time_utc = _start_time.astimezone(timezone.utc)
+                end_time_utc = _end_time.astimezone(timezone.utc)
 
-            logger.info(f"Creating calendar event: {title} at {start_time_utc}")
+                logger.info(f"Creating calendar event: {title} at {start_time_utc}")
 
-            event = {
-                "summary": title,
-                "description": description,
-                "start": {
-                    "dateTime": start_time_utc.isoformat(),
-                    "timeZone": "UTC",
-                },
-                "end": {
-                    "dateTime": end_time_utc.isoformat(),
-                    "timeZone": "UTC",
-                },
-            }
+                event = {
+                    "summary": title,
+                    "description": description,
+                    "start": {
+                        "dateTime": start_time_utc.isoformat(),
+                        "timeZone": "UTC",
+                    },
+                    "end": {
+                        "dateTime": end_time_utc.isoformat(),
+                        "timeZone": "UTC",
+                    },
+                }
 
-            # Add attendees if provided
-            if attendees:
-                event["attendees"] = [{"email": email} for email in attendees]
-                event["guestsCanModify"] = False
-                event["guestsCanInviteOthers"] = False
+                # Add attendees if provided
+                if attendees:
+                    event["attendees"] = [{"email": email} for email in attendees]
+                    event["guestsCanModify"] = False
+                    event["guestsCanInviteOthers"] = False
 
-            # Run blocking API call in executor
-            created_event = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.events()
-                .insert(calendarId="primary", body=event, sendUpdates="all")
-                .execute(),
+                # Run blocking API call in executor
+                created_event = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: service.events()
+                    .insert(calendarId="primary", body=event, sendUpdates="all")
+                    .execute(),
+                )
+
+                logger.info(f"Event created successfully: {created_event['id']}")
+
+                return {
+                    "success": True,
+                    "event_id": created_event.get("id"),
+                    "calendar_link": created_event.get("htmlLink"),
+                    "message": f"Event '{title}' scheduled successfully",
+                }
+
+            # Execute with retry logic
+            result = await with_retry(
+                _create_event,
+                max_retries=3,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+                operation_name="Calendar Event Creation",
             )
 
-            logger.info(f"Event created successfully: {created_event['id']}")
+            metric.mark_success()
+            metrics_tracker.record_operation(metric)
+            return result
 
-            return {
-                "success": True,
-                "event_id": created_event.get("id"),
-                "calendar_link": created_event.get("htmlLink"),
-                "message": f"Event '{title}' scheduled successfully",
-            }
-
-        except HttpError as e:
-            logger.error(f"Google Calendar API error in create_calendar_event: {e}")
-            return {
-                "success": False,
-                "event_id": None,
-                "calendar_link": None,
-                "message": f"Failed to create event: {e}",
-            }
         except Exception as e:
-            logger.error(f"Error creating calendar event: {e}", exc_info=True)
+            metric.mark_failure(e)
+            metrics_tracker.record_operation(metric)
+            logger.error(f"Error creating calendar event after retries: {e}", exc_info=True)
             return {
                 "success": False,
                 "event_id": None,
