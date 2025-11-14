@@ -8,8 +8,9 @@ using Deepgram's Aura model optimized for natural-sounding speech.
 import asyncio
 import json
 import logging
+import re
 import time
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import websockets
 from app.utils.retry import with_retry
@@ -292,3 +293,72 @@ class DeepgramTTSService(TTSInterface):
         self.first_byte_received = False
 
         logger.info("[TTS] Deepgram TTS connection closed")
+
+    def _clean_text_for_tts(self, text: str) -> str:
+        """
+        Clean text before sending to TTS to prevent reading punctuation aloud.
+
+        Deepgram TTS reads punctuation like periods ("dot"), question marks, etc.
+        This method removes or normalizes punctuation for natural speech.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Cleaned text suitable for TTS
+        """
+        # Remove trailing punctuation (period, question mark, exclamation)
+        text = re.sub(r'[.!?]+\s*$', '', text)
+
+        # Replace mid-sentence punctuation with natural pauses (spaces)
+        # Keep commas as they provide natural speech rhythm
+        text = re.sub(r'([.!?])\s+', ' ', text)
+
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+
+        return text.strip()
+
+    async def text_to_speech(self, text: str) -> AsyncGenerator[bytes, None]:
+        """
+        Convert text to speech and yield audio chunks.
+
+        This is a convenience method that combines send_text() and get_audio()
+        into a single async generator for easier consumption.
+
+        Args:
+            text: Text to convert to speech
+
+        Yields:
+            Audio chunks as bytes (mulaw @ 8kHz)
+
+        Example:
+            async for audio_chunk in tts.text_to_speech("Hello world"):
+                # Send audio_chunk to Twilio
+                pass
+        """
+        # Clean text to prevent TTS from reading punctuation
+        cleaned_text = self._clean_text_for_tts(text)
+
+        # Send text to TTS
+        await self.send_text(cleaned_text)
+        await self.flush()
+
+        # Yield audio chunks as they become available
+        while True:
+            audio = await self.get_audio()
+            if audio is None:
+                # Small delay to avoid busy-waiting
+                await asyncio.sleep(0.01)
+
+                # Check if we've received all audio
+                # (TTS sends all audio quickly, so if queue is empty after a short wait, we're done)
+                if self.first_byte_received:
+                    # Give it a bit more time to ensure all chunks arrived
+                    await asyncio.sleep(0.05)
+                    final_audio = await self.get_audio()
+                    if final_audio:
+                        yield final_audio
+                    break
+            else:
+                yield audio

@@ -7,7 +7,7 @@ This script helps you generate a refresh token for Google Calendar API access.
 Prerequisites:
 1. Google Cloud Console project with Calendar API enabled
 2. OAuth 2.0 Client ID credentials created (Web application type)
-3. Authorized redirect URI: http://localhost:8080
+3. Authorized redirect URI: http://localhost:8000
 4. GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env file
 
 Usage:
@@ -37,7 +37,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # Local redirect URI (must match Google Cloud Console setting)
-REDIRECT_URI = "http://localhost:8080"
+# Changed to 8000 to match the FastAPI server port
+REDIRECT_URI = "http://localhost:8000"
 
 
 def load_env_credentials():
@@ -152,7 +153,7 @@ def generate_refresh_token(update_env=False):
         )
 
         # Run local server to receive auth code
-        creds = flow.run_local_server(port=8080, open_browser=True)
+        creds = flow.run_local_server(port=8000, open_browser=True)
 
         refresh_token = creds.refresh_token
 
@@ -201,7 +202,7 @@ def generate_refresh_token(update_env=False):
         print(f"Failed to generate refresh token: {e}")
         print()
         print("Common issues:")
-        print("1. Check that redirect URI 'http://localhost:8080' is in Google Console")
+        print("1. Check that redirect URI 'http://localhost:8000' is in Google Console")
         print("2. Ensure Google Calendar API is enabled in your project")
         print("3. Verify Client ID and Client Secret are correct")
         print()

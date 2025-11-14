@@ -299,27 +299,50 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
         else:  # Saturday
             start_hour, end_hour = 9, 15  # 9 AM - 3 PM
 
-        # Initialize calendar service
-        calendar = CalendarService(
-            client_id=settings.GOOGLE_CLIENT_ID,
-            client_secret=settings.GOOGLE_CLIENT_SECRET,
-            refresh_token=settings.GOOGLE_REFRESH_TOKEN,
-            timezone_name=settings.CALENDAR_TIMEZONE,
-        )
+        # Try Google Calendar integration with graceful fallback
+        try:
+            # Initialize calendar service
+            calendar = CalendarService(
+                client_id=settings.GOOGLE_CLIENT_ID,
+                client_secret=settings.GOOGLE_CLIENT_SECRET,
+                refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                timezone_name=settings.CALENDAR_TIMEZONE,
+            )
 
-        # Create timezone-aware datetime for the day
-        tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
-        start_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=start_hour, minute=0, second=0, microsecond=0, tzinfo=tz
-        )
-        end_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=end_hour, minute=0, second=0, microsecond=0, tzinfo=tz
-        )
+            # Create timezone-aware datetime for the day
+            tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+            start_time = datetime.combine(slot_date, datetime.min.time()).replace(
+                hour=start_hour, minute=0, second=0, microsecond=0, tzinfo=tz
+            )
+            end_time = datetime.combine(slot_date, datetime.min.time()).replace(
+                hour=end_hour, minute=0, second=0, microsecond=0, tzinfo=tz
+            )
 
-        # Get free slots from Google Calendar (ACTUAL CALL!)
-        free_slots = await calendar.get_free_availability(
-            start_time=start_time, end_time=end_time, duration_minutes=duration_minutes
-        )
+            # Get free slots from Google Calendar (ACTUAL CALL!)
+            free_slots = await calendar.get_free_availability(
+                start_time=start_time, end_time=end_time, duration_minutes=duration_minutes
+            )
+        except Exception as calendar_error:
+            # Graceful degradation: use mock availability if calendar fails
+            logger.warning(
+                f"Calendar integration failed ({type(calendar_error).__name__}: {calendar_error}), "
+                "using mock availability"
+            )
+
+            # Generate mock slots (every hour during business hours)
+            tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+            free_slots = []
+            current_time = datetime.combine(slot_date, datetime.min.time()).replace(
+                hour=start_hour, minute=0, second=0, microsecond=0, tzinfo=tz
+            )
+            end_time_mock = datetime.combine(slot_date, datetime.min.time()).replace(
+                hour=end_hour, minute=0, second=0, microsecond=0, tzinfo=tz
+            )
+
+            while current_time < end_time_mock:
+                slot_end = current_time + timedelta(minutes=duration_minutes)
+                free_slots.append({"start": current_time, "end": slot_end})
+                current_time += timedelta(hours=1)  # Hourly slots
 
         # Format slots for response
         formatted_slots = []
