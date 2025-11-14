@@ -19,6 +19,13 @@ async def lifespan(app: FastAPI):
     # Startup
     await init_db()
     await init_redis()
+
+    # Start background tasks for monitoring
+    import asyncio
+    from app.utils.background_tasks import startup_background_tasks
+
+    asyncio.create_task(startup_background_tasks())
+
     yield
     # Shutdown
     await close_db()

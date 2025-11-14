@@ -6,11 +6,14 @@ import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import httpx
+from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
+from app.services.calendar_service import CalendarService
 from app.services.redis_client import (
     cache_customer,
     get_cached_customer,
@@ -244,8 +247,9 @@ async def search_customers_by_name(
 
 async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str, Any]:
     """
-    Get available appointment slots for a given date (POC mock implementation).
+    Get available appointment slots from Google Calendar for a specific date.
 
+    This function now ACTUALLY checks Google Calendar via CalendarService.
     Business hours:
     - Monday-Friday: 9 AM - 5 PM (excluding 12-1 PM lunch)
     - Saturday: 9 AM - 3 PM (excluding 12-1 PM lunch)
@@ -253,24 +257,25 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
 
     Args:
         date: Date string in YYYY-MM-DD format
-        duration_minutes: Slot duration in minutes (default: 30)
+        duration_minutes: Minimum slot duration in minutes (default: 30)
 
     Returns:
-        Dict with available slots:
+        Dict with available slots from actual Google Calendar:
             {
                 "success": True,
                 "date": str,
                 "day_of_week": str,
-                "available_slots": [str] (ISO timestamps),
+                "available_slots": [
+                    {
+                        "start": str (ISO format),
+                        "end": str (ISO format),
+                        "start_time": str (12-hour format),
+                        "end_time": str (12-hour format)
+                    }
+                ],
+                "count": int,
                 "message": str
             }
-
-    Raises:
-        ValueError: If date format is invalid
-
-    Note:
-        This is a POC mock implementation. Feature 7 will integrate with
-        Google Calendar to check actual availability.
     """
     try:
         # Parse and validate date
@@ -284,45 +289,61 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
                 "date": date,
                 "day_of_week": day_of_week,
                 "available_slots": [],
+                "count": 0,
                 "message": "We are closed on Sundays",
             }
 
-        # Determine business hours
+        # Determine business hours based on day of week
         if slot_date.weekday() < 5:  # Monday-Friday
             start_hour, end_hour = 9, 17  # 9 AM - 5 PM
         else:  # Saturday
             start_hour, end_hour = 9, 15  # 9 AM - 3 PM
 
-        # Generate slots
-        slots = []
-        current_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=start_hour, tzinfo=timezone.utc
+        # Initialize calendar service
+        calendar = CalendarService(
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
+            refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+            timezone_name=settings.CALENDAR_TIMEZONE,
+        )
+
+        # Create timezone-aware datetime for the day
+        tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+        start_time = datetime.combine(slot_date, datetime.min.time()).replace(
+            hour=start_hour, minute=0, second=0, microsecond=0, tzinfo=tz
         )
         end_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=end_hour, tzinfo=timezone.utc
-        )
-        lunch_start = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=12, tzinfo=timezone.utc
-        )
-        lunch_end = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=13, tzinfo=timezone.utc
+            hour=end_hour, minute=0, second=0, microsecond=0, tzinfo=tz
         )
 
-        while current_time < end_time:
-            # Skip lunch hour (12 PM - 1 PM)
-            if not (lunch_start <= current_time < lunch_end):
-                slots.append(current_time.isoformat())
+        # Get free slots from Google Calendar (ACTUAL CALL!)
+        free_slots = await calendar.get_free_availability(
+            start_time=start_time, end_time=end_time, duration_minutes=duration_minutes
+        )
 
-            current_time += timedelta(minutes=duration_minutes)
+        # Format slots for response
+        formatted_slots = []
+        for slot in free_slots:
+            formatted_slots.append(
+                {
+                    "start": slot["start"].isoformat(),
+                    "end": slot["end"].isoformat(),
+                    "start_time": slot["start"].strftime("%I:%M %p"),
+                    "end_time": slot["end"].strftime("%I:%M %p"),
+                }
+            )
 
-        logger.info(f"Generated {len(slots)} available slots for {date}")
+        logger.info(
+            f"Found {len(formatted_slots)} available slots from Google Calendar for {date}"
+        )
 
         return {
             "success": True,
             "date": date,
             "day_of_week": day_of_week,
-            "available_slots": slots,
-            "message": f"Found {len(slots)} available time slots",
+            "available_slots": formatted_slots,
+            "count": len(formatted_slots),
+            "message": f"Found {len(formatted_slots)} available time slots",
         }
 
     except ValueError as e:
@@ -333,8 +354,12 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
             "message": "Invalid date format",
         }
     except Exception as e:
-        logger.error(f"Error generating slots for {date}: {e}", exc_info=True)
-        return {"success": False, "error": str(e), "message": "Error generating available slots"}
+        logger.error(f"Error getting calendar availability for {date}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error checking calendar availability",
+        }
 
 
 # ============================================================================
@@ -354,7 +379,13 @@ async def book_appointment(
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Book a service appointment.
+    Book a service appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates customer and vehicle
+    2. Creates Google Calendar event with customer details
+    3. Creates database appointment record with calendar_event_id
+    4. Sends calendar invitation to customer email if available
 
     Args:
         db: Database session
@@ -373,6 +404,8 @@ async def book_appointment(
                 "success": True,
                 "data": {
                     "appointment_id": int,
+                    "calendar_event_id": str,
+                    "calendar_link": str,
                     "customer_id": int,
                     "customer_name": str,
                     "vehicle_id": int,
@@ -384,9 +417,6 @@ async def book_appointment(
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will create a Google Calendar event for this appointment.
     """
     try:
         # Validate customer exists
@@ -443,7 +473,59 @@ async def book_appointment(
                 "message": "Invalid service type",
             }
 
-        # Create appointment
+        # Initialize calendar service and create calendar event
+        calendar = CalendarService(
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
+            refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+            timezone_name=settings.CALENDAR_TIMEZONE,
+        )
+
+        # Prepare calendar event details
+        customer_name = f"{customer.first_name} {customer.last_name}"
+        vehicle_info = f"{vehicle.year} {vehicle.make} {vehicle.model}"
+
+        # Convert datetime to timezone-aware for calendar
+        tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+        start_time = scheduled_datetime.replace(tzinfo=tz)
+        end_time = start_time + timedelta(minutes=duration_minutes)
+
+        # Build calendar event description with all details
+        event_description = (
+            f"Customer: {customer_name}\n"
+            f"Phone: {customer.phone_number}\n"
+            f"Email: {customer.email or 'N/A'}\n"
+            f"Vehicle: {vehicle_info}\n"
+            f"VIN: {vehicle.vin}\n"
+            f"Service Type: {service_type}\n"
+        )
+
+        # Add optional fields to description
+        if service_description:
+            event_description += f"\nService Description: {service_description}"
+        if customer_concerns:
+            event_description += f"\nCustomer Concerns: {customer_concerns}"
+        if notes:
+            event_description += f"\nNotes: {notes}"
+
+        # Create calendar event
+        calendar_result = await calendar.create_calendar_event(
+            title=f"{service_type} - {customer_name}",
+            start_time=start_time,
+            end_time=end_time,
+            description=event_description,
+            attendees=[customer.email] if customer.email else None,
+        )
+
+        if not calendar_result["success"]:
+            logger.error(f"Failed to create calendar event: {calendar_result['message']}")
+            return {
+                "success": False,
+                "error": f"Failed to create calendar event: {calendar_result['message']}",
+                "message": "Failed to create calendar event",
+            }
+
+        # Create appointment in database with calendar event ID
         appointment = Appointment(
             customer_id=customer_id,
             vehicle_id=vehicle_id,
@@ -457,6 +539,7 @@ async def book_appointment(
             confirmation_sent=True,
             booking_method="ai_voice",
             booked_by="AI Voice Agent",
+            calendar_event_id=calendar_result["event_id"],
         )
 
         db.add(appointment)
@@ -465,30 +548,29 @@ async def book_appointment(
 
         logger.info(
             f"Appointment {appointment.id} created for customer {customer_id}, "
-            f"vehicle {vehicle_id} at {scheduled_at}"
+            f"vehicle {vehicle_id} at {scheduled_at} with calendar event {calendar_result['event_id']}"
         )
 
         # Invalidate customer cache (data changed)
         await invalidate_customer_cache(customer.phone_number)
 
         # Build response
-        customer_name = f"{customer.first_name} {customer.last_name}"
-        vehicle_description = f"{vehicle.year} {vehicle.make} {vehicle.model}"
-
         return {
             "success": True,
             "data": {
                 "appointment_id": appointment.id,
+                "calendar_event_id": calendar_result["event_id"],
+                "calendar_link": calendar_result["calendar_link"],
                 "customer_id": customer_id,
                 "customer_name": customer_name,
                 "vehicle_id": vehicle_id,
-                "vehicle_description": vehicle_description,
+                "vehicle_description": vehicle_info,
                 "scheduled_at": scheduled_datetime.isoformat(),
                 "service_type": service_type,
                 "duration_minutes": duration_minutes,
                 "status": appointment.status.value,
             },
-            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}",
+            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}. Calendar event created: {calendar_result['calendar_link']}",
         }
 
     except Exception as e:
@@ -612,7 +694,13 @@ async def get_upcoming_appointments(db: AsyncSession, customer_id: int) -> Dict[
 
 async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str) -> Dict[str, Any]:
     """
-    Cancel an appointment.
+    Cancel an appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates appointment exists and is not already cancelled
+    2. Deletes the Google Calendar event (if calendar_event_id exists)
+    3. Updates appointment status to CANCELLED in database
+    4. Sends cancellation notification to attendees
 
     Args:
         db: Database session
@@ -631,9 +719,6 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str)
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will delete the corresponding Google Calendar event.
     """
     try:
         # Get appointment
@@ -654,6 +739,29 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str)
                 "error": "Appointment is already cancelled",
                 "message": "Appointment is already cancelled",
             }
+
+        # Delete calendar event if it exists
+        if appointment.calendar_event_id:
+            calendar = CalendarService(
+                client_id=settings.GOOGLE_CLIENT_ID,
+                client_secret=settings.GOOGLE_CLIENT_SECRET,
+                refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                timezone_name=settings.CALENDAR_TIMEZONE,
+            )
+
+            calendar_result = await calendar.cancel_calendar_event(
+                event_id=appointment.calendar_event_id
+            )
+
+            if not calendar_result["success"]:
+                logger.warning(
+                    f"Failed to cancel calendar event {appointment.calendar_event_id}: {calendar_result['message']}"
+                )
+                # Continue with DB update even if calendar deletion fails
+            else:
+                logger.info(
+                    f"Calendar event {appointment.calendar_event_id} cancelled successfully"
+                )
 
         # Update appointment
         appointment.status = AppointmentStatus.CANCELLED
@@ -697,7 +805,13 @@ async def reschedule_appointment(
     db: AsyncSession, appointment_id: int, new_datetime: str
 ) -> Dict[str, Any]:
     """
-    Reschedule an appointment to a new time.
+    Reschedule an appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates appointment exists and is not cancelled
+    2. Updates the Google Calendar event time (if calendar_event_id exists)
+    3. Updates appointment scheduled_at in database
+    4. Sends update notification to attendees
 
     Args:
         db: Database session
@@ -717,9 +831,6 @@ async def reschedule_appointment(
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will update the corresponding Google Calendar event.
     """
     try:
         # Get appointment
@@ -757,6 +868,38 @@ async def reschedule_appointment(
 
         # Store old datetime for response
         old_datetime = appointment.scheduled_at.isoformat()
+
+        # Update calendar event if it exists
+        if appointment.calendar_event_id:
+            calendar = CalendarService(
+                client_id=settings.GOOGLE_CLIENT_ID,
+                client_secret=settings.GOOGLE_CLIENT_SECRET,
+                refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                timezone_name=settings.CALENDAR_TIMEZONE,
+            )
+
+            # Convert to timezone-aware for calendar
+            tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+            new_start_time = new_scheduled_at.replace(tzinfo=tz)
+            new_end_time = new_start_time + timedelta(minutes=appointment.duration_minutes)
+
+            calendar_result = await calendar.update_calendar_event(
+                event_id=appointment.calendar_event_id,
+                start_time=new_start_time,
+                end_time=new_end_time,
+            )
+
+            if not calendar_result["success"]:
+                logger.error(
+                    f"Failed to update calendar event {appointment.calendar_event_id}: {calendar_result['message']}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Failed to update calendar event: {calendar_result['message']}",
+                    "message": "Failed to update calendar event",
+                }
+
+            logger.info(f"Calendar event {appointment.calendar_event_id} updated successfully")
 
         # Update appointment
         appointment.scheduled_at = new_scheduled_at
