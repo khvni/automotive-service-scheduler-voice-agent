@@ -197,6 +197,16 @@ fi
 
 echo ""
 
+# Generate fresh Google Calendar refresh token
+echo -e "${YELLOW}Generating fresh Google Calendar refresh token...${NC}"
+if venv-new/bin/python scripts/generate_google_refresh_token.py --update-env 2>&1 | grep -q "SUCCESS"; then
+    echo -e "${GREEN}✓ Google Calendar refresh token updated${NC}"
+else
+    echo -e "${YELLOW}⚠ Skipped Google Calendar token refresh (may need manual authorization)${NC}"
+    echo -e "${YELLOW}  Run manually: python scripts/generate_google_refresh_token.py --update-env${NC}"
+fi
+echo ""
+
 # Seed test data (if needed)
 echo -e "${YELLOW}Checking for test data...${NC}"
 venv-new/bin/python scripts/seed_test_data.py 2>&1 | grep -v "sqlalchemy\|psycopg" || true
