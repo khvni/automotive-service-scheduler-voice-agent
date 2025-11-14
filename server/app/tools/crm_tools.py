@@ -6,11 +6,14 @@ import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import httpx
+from app.config import settings
 from app.models.appointment import Appointment, AppointmentStatus, ServiceType
 from app.models.customer import Customer
 from app.models.vehicle import Vehicle
+from app.services.calendar_service import CalendarService
 from app.services.redis_client import (
     cache_customer,
     get_cached_customer,
@@ -275,11 +278,6 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
             }
     """
     try:
-        from zoneinfo import ZoneInfo
-
-        from app.config import settings
-        from app.services.calendar_service import CalendarService
-
         # Parse and validate date
         slot_date = datetime.fromisoformat(date).date()
         day_of_week = slot_date.strftime("%A")
@@ -476,11 +474,6 @@ async def book_appointment(
             }
 
         # Initialize calendar service and create calendar event
-        from zoneinfo import ZoneInfo
-
-        from app.config import settings
-        from app.services.calendar_service import CalendarService
-
         calendar = CalendarService(
             client_id=settings.GOOGLE_CLIENT_ID,
             client_secret=settings.GOOGLE_CLIENT_SECRET,
@@ -749,9 +742,6 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str)
 
         # Delete calendar event if it exists
         if appointment.calendar_event_id:
-            from app.config import settings
-            from app.services.calendar_service import CalendarService
-
             calendar = CalendarService(
                 client_id=settings.GOOGLE_CLIENT_ID,
                 client_secret=settings.GOOGLE_CLIENT_SECRET,
@@ -881,11 +871,6 @@ async def reschedule_appointment(
 
         # Update calendar event if it exists
         if appointment.calendar_event_id:
-            from zoneinfo import ZoneInfo
-
-            from app.config import settings
-            from app.services.calendar_service import CalendarService
-
             calendar = CalendarService(
                 client_id=settings.GOOGLE_CLIENT_ID,
                 client_secret=settings.GOOGLE_CLIENT_SECRET,
