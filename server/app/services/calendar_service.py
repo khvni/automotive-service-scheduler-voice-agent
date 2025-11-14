@@ -327,6 +327,8 @@ class CalendarService:
         Only provided fields will be updated. Fields set to None will
         remain unchanged.
 
+        Includes automatic retry for transient errors and performance tracking.
+
         Args:
             event_id: Google Calendar event ID
             title: New event title (optional)
@@ -347,74 +349,84 @@ class CalendarService:
         Raises:
             Exception: If event update fails
         """
+        # Start metrics tracking
+        metrics_tracker = get_metrics_tracker()
+        metric = metrics_tracker.start_operation("update_event")
+
         try:
-            service = self.get_calendar_service()
+            async def _update_event():
+                service = self.get_calendar_service()
 
-            logger.info(f"Updating calendar event: {event_id}")
+                logger.info(f"Updating calendar event: {event_id}")
 
-            # Get existing event
-            event = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: service.events().get(calendarId="primary", eventId=event_id).execute()
+                # Get existing event
+                event = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: service.events().get(calendarId="primary", eventId=event_id).execute()
+                )
+
+                # Update provided fields
+                if title:
+                    event["summary"] = title
+                if description is not None:  # Allow empty string
+                    event["description"] = description
+
+                # Update time if both start and end provided
+                if start_time and end_time:
+                    # Ensure times are timezone-aware
+                    _start_time = start_time.replace(tzinfo=self.timezone) if start_time.tzinfo is None else start_time
+                    _end_time = end_time.replace(tzinfo=self.timezone) if end_time.tzinfo is None else end_time
+
+                    # Convert to UTC for API
+                    start_time_utc = _start_time.astimezone(timezone.utc)
+                    end_time_utc = _end_time.astimezone(timezone.utc)
+
+                    event["start"] = {
+                        "dateTime": start_time_utc.isoformat(),
+                        "timeZone": "UTC",
+                    }
+                    event["end"] = {
+                        "dateTime": end_time_utc.isoformat(),
+                        "timeZone": "UTC",
+                    }
+
+                # Update attendees if provided
+                if attendees is not None:
+                    event["attendees"] = [{"email": email} for email in attendees]
+
+                # Run blocking API call in executor
+                updated_event = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: service.events()
+                    .update(calendarId="primary", eventId=event_id, body=event, sendUpdates="all")
+                    .execute(),
+                )
+
+                logger.info(f"Event updated successfully: {event_id}")
+
+                return {
+                    "success": True,
+                    "event_id": updated_event.get("id"),
+                    "calendar_link": updated_event.get("htmlLink"),
+                    "message": "Event updated successfully",
+                }
+
+            # Execute with retry logic
+            result = await with_retry(
+                _update_event,
+                max_retries=3,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+                operation_name="Calendar Event Update",
             )
 
-            # Update provided fields
-            if title:
-                event["summary"] = title
-            if description is not None:  # Allow empty string
-                event["description"] = description
+            metric.mark_success()
+            metrics_tracker.record_operation(metric)
+            return result
 
-            # Update time if both start and end provided
-            if start_time and end_time:
-                # Ensure times are timezone-aware
-                if start_time.tzinfo is None:
-                    start_time = start_time.replace(tzinfo=self.timezone)
-                if end_time.tzinfo is None:
-                    end_time = end_time.replace(tzinfo=self.timezone)
-
-                # Convert to UTC for API
-                start_time_utc = start_time.astimezone(timezone.utc)
-                end_time_utc = end_time.astimezone(timezone.utc)
-
-                event["start"] = {
-                    "dateTime": start_time_utc.isoformat(),
-                    "timeZone": "UTC",
-                }
-                event["end"] = {
-                    "dateTime": end_time_utc.isoformat(),
-                    "timeZone": "UTC",
-                }
-
-            # Update attendees if provided
-            if attendees is not None:
-                event["attendees"] = [{"email": email} for email in attendees]
-
-            # Run blocking API call in executor
-            updated_event = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.events()
-                .update(calendarId="primary", eventId=event_id, body=event, sendUpdates="all")
-                .execute(),
-            )
-
-            logger.info(f"Event updated successfully: {event_id}")
-
-            return {
-                "success": True,
-                "event_id": updated_event.get("id"),
-                "calendar_link": updated_event.get("htmlLink"),
-                "message": "Event updated successfully",
-            }
-
-        except HttpError as e:
-            logger.error(f"Google Calendar API error in update_calendar_event: {e}")
-            return {
-                "success": False,
-                "event_id": event_id,
-                "calendar_link": None,
-                "message": f"Failed to update event: {e}",
-            }
         except Exception as e:
-            logger.error(f"Error updating calendar event: {e}", exc_info=True)
+            metric.mark_failure(e)
+            metrics_tracker.record_operation(metric)
+            logger.error(f"Error updating calendar event after retries: {e}", exc_info=True)
             return {
                 "success": False,
                 "event_id": event_id,
@@ -425,6 +437,8 @@ class CalendarService:
     async def cancel_calendar_event(self, event_id: str) -> Dict[str, bool]:
         """
         Cancel (delete) a calendar event.
+
+        Includes automatic retry for transient errors and performance tracking.
 
         Args:
             event_id: Google Calendar event ID
@@ -439,28 +453,45 @@ class CalendarService:
         Raises:
             Exception: If event cancellation fails
         """
+        # Start metrics tracking
+        metrics_tracker = get_metrics_tracker()
+        metric = metrics_tracker.start_operation("delete_event")
+
         try:
-            service = self.get_calendar_service()
+            async def _cancel_event():
+                service = self.get_calendar_service()
 
-            logger.info(f"Cancelling calendar event: {event_id}")
+                logger.info(f"Cancelling calendar event: {event_id}")
 
-            # Run blocking API call in executor
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: service.events()
-                .delete(calendarId="primary", eventId=event_id, sendUpdates="all")
-                .execute(),
+                # Run blocking API call in executor
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: service.events()
+                    .delete(calendarId="primary", eventId=event_id, sendUpdates="all")
+                    .execute(),
+                )
+
+                logger.info(f"Event cancelled successfully: {event_id}")
+
+                return {"success": True, "message": "Event cancelled successfully"}
+
+            # Execute with retry logic
+            result = await with_retry(
+                _cancel_event,
+                max_retries=3,
+                backoff_factor=2.0,
+                initial_delay=1.0,
+                operation_name="Calendar Event Cancellation",
             )
 
-            logger.info(f"Event cancelled successfully: {event_id}")
+            metric.mark_success()
+            metrics_tracker.record_operation(metric)
+            return result
 
-            return {"success": True, "message": "Event cancelled successfully"}
-
-        except HttpError as e:
-            logger.error(f"Google Calendar API error in cancel_calendar_event: {e}")
-            return {"success": False, "message": f"Failed to cancel event: {e}"}
         except Exception as e:
-            logger.error(f"Error cancelling calendar event: {e}", exc_info=True)
+            metric.mark_failure(e)
+            metrics_tracker.record_operation(metric)
+            logger.error(f"Error cancelling calendar event after retries: {e}", exc_info=True)
             return {"success": False, "message": f"Failed to cancel event: {str(e)}"}
 
     async def get_event(self, event_id: str) -> Optional[Dict[str, Any]]:
