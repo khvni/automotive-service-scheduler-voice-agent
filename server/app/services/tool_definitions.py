@@ -50,7 +50,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_available_slots",
-            "description": "Get available appointment time slots for a specific date. Returns list of available times for booking.",
+            "description": "Check Google Calendar for ACTUAL available appointment slots on a specific date. Returns real-time availability considering existing bookings. Business hours: Mon-Fri 9AM-5PM, Sat 9AM-3PM, Sun closed. Excludes lunch hour (12-1 PM).",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -60,7 +60,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     },
                     "duration_minutes": {
                         "type": "integer",
-                        "description": "Appointment duration in minutes. Common values: 30 (quick service), 60 (standard service), 90 (complex work). Default: 30",
+                        "description": "Minimum slot duration in minutes. Common values: 30 (oil change), 60 (brake service), 90 (complex repairs). Default: 30",
                         "default": 30,
                     },
                 },
@@ -72,7 +72,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "book_appointment",
-            "description": "Book a service appointment for a customer. Creates appointment in system and Google Calendar.",
+            "description": "Book a service appointment for a customer. Creates appointment in database AND Google Calendar. Sends calendar invitation to customer email if available. IMPORTANT: MUST check availability with get_available_slots before booking.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -86,15 +86,15 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     },
                     "scheduled_at": {
                         "type": "string",
-                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00')",
+                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00'). MUST be within available slots from get_available_slots.",
                     },
                     "service_type": {
                         "type": "string",
-                        "description": "Type of service to book (e.g., 'oil_change', 'brake_service', 'inspection')",
+                        "description": "Type of service to book (e.g., 'oil_change', 'brake_service', 'inspection', 'tire_rotation')",
                     },
                     "duration_minutes": {
                         "type": "integer",
-                        "description": "Duration in minutes (default: 60)",
+                        "description": "Duration in minutes (default: 60). Should match duration used in get_available_slots.",
                         "default": 60,
                     },
                     "notes": {
@@ -127,7 +127,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "cancel_appointment",
-            "description": "Cancel an existing appointment. Updates system and removes from calendar.",
+            "description": "Cancel an existing appointment. Updates database status AND removes from Google Calendar. Customer will receive cancellation notification if they have email.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -137,7 +137,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     },
                     "reason": {
                         "type": "string",
-                        "description": "Reason for cancellation (optional but helpful for tracking)",
+                        "description": "Reason for cancellation (helps with tracking and analytics)",
                         "enum": [
                             "schedule_conflict",
                             "got_service_elsewhere",
@@ -155,7 +155,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "reschedule_appointment",
-            "description": "Reschedule an existing appointment to a new time. Updates system and calendar.",
+            "description": "Reschedule an existing appointment to a new time. Updates database AND Google Calendar event. Customer receives update notification. IMPORTANT: Check availability with get_available_slots before rescheduling.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -165,7 +165,7 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                     },
                     "new_datetime": {
                         "type": "string",
-                        "description": "New appointment datetime in ISO format (e.g., '2025-01-16T14:00:00')",
+                        "description": "New appointment datetime in ISO format (e.g., '2025-01-16T14:00:00'). Should be from available slots.",
                     },
                 },
                 "required": ["appointment_id", "new_datetime"],
