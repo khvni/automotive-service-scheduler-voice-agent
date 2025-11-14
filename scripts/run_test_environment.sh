@@ -196,6 +196,12 @@ if ! check_service localhost 8000; then
 fi
 
 echo ""
+
+# Seed test data (if needed)
+echo -e "${YELLOW}Checking for test data...${NC}"
+venv-new/bin/python scripts/seed_test_data.py
+echo ""
+
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}✓ All services running successfully!${NC}"
 echo -e "${GREEN}========================================${NC}"
