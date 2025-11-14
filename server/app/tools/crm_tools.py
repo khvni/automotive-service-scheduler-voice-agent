@@ -815,7 +815,13 @@ async def reschedule_appointment(
     db: AsyncSession, appointment_id: int, new_datetime: str
 ) -> Dict[str, Any]:
     """
-    Reschedule an appointment to a new time.
+    Reschedule an appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates appointment exists and is not cancelled
+    2. Updates the Google Calendar event time (if calendar_event_id exists)
+    3. Updates appointment scheduled_at in database
+    4. Sends update notification to attendees
 
     Args:
         db: Database session
@@ -835,9 +841,6 @@ async def reschedule_appointment(
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will update the corresponding Google Calendar event.
     """
     try:
         # Get appointment
@@ -875,6 +878,43 @@ async def reschedule_appointment(
 
         # Store old datetime for response
         old_datetime = appointment.scheduled_at.isoformat()
+
+        # Update calendar event if it exists
+        if appointment.calendar_event_id:
+            from zoneinfo import ZoneInfo
+
+            from app.config import settings
+            from app.services.calendar_service import CalendarService
+
+            calendar = CalendarService(
+                client_id=settings.GOOGLE_CLIENT_ID,
+                client_secret=settings.GOOGLE_CLIENT_SECRET,
+                refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                timezone_name=settings.CALENDAR_TIMEZONE,
+            )
+
+            # Convert to timezone-aware for calendar
+            tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+            new_start_time = new_scheduled_at.replace(tzinfo=tz)
+            new_end_time = new_start_time + timedelta(minutes=appointment.duration_minutes)
+
+            calendar_result = await calendar.update_calendar_event(
+                event_id=appointment.calendar_event_id,
+                start_time=new_start_time,
+                end_time=new_end_time,
+            )
+
+            if not calendar_result["success"]:
+                logger.error(
+                    f"Failed to update calendar event {appointment.calendar_event_id}: {calendar_result['message']}"
+                )
+                return {
+                    "success": False,
+                    "error": f"Failed to update calendar event: {calendar_result['message']}",
+                    "message": "Failed to update calendar event",
+                }
+
+            logger.info(f"Calendar event {appointment.calendar_event_id} updated successfully")
 
         # Update appointment
         appointment.scheduled_at = new_scheduled_at
