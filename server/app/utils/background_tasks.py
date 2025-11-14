@@ -43,9 +43,7 @@ async def log_calendar_metrics_periodically(interval_seconds: int = 3600):
                     f"(Success: {overall_stats['successful_operations']}, "
                     f"Failed: {overall_stats['failed_operations']})"
                 )
-                logger.info(
-                    f"Success Rate: {overall_stats['success_rate']:.1%}"
-                )
+                logger.info(f"Success Rate: {overall_stats['success_rate']:.1%}")
                 logger.info(
                     f"Latency: {overall_stats['avg_latency_ms']:.2f}ms avg, "
                     f"{overall_stats['p95_latency_ms']:.2f}ms p95"

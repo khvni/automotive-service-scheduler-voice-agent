@@ -113,7 +113,7 @@ def generate_refresh_token(update_env=False):
         print()
         print("Add these to your .env file:")
         print("GOOGLE_CLIENT_ID='your_client_id_here'")
-        print("GOOGLE_CLIENT_SECRET='your_client_secret_here'")
+        print("GOOGLE_CLIENT_SECRET='your_client_secret_here'")  # pragma: allowlist secret
         print()
         sys.exit(1)
 

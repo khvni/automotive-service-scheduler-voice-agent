@@ -58,9 +58,7 @@ class CalendarOperationMetrics:
     def increment_retry(self) -> None:
         """Increment retry counter."""
         self.retry_count += 1
-        logger.warning(
-            f"🔄 Calendar {self.operation} retry #{self.retry_count}"
-        )
+        logger.warning(f"🔄 Calendar {self.operation} retry #{self.retry_count}")
 
 
 class CalendarMetricsTracker:

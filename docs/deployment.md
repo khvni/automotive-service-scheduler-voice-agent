@@ -217,7 +217,7 @@ REDIS_URL=rediss://default:password@host.upstash.io:6379  # pragma: allowlist se
 
 ```bash
 # In .env
-REDIS_URL=redis://default:password@host.cloud.redislabs.com:port
+REDIS_URL=redis://default:password@host.cloud.redislabs.com:port  # pragma: allowlist secret
 ```
 
 ### Option B: Self-Hosted Redis

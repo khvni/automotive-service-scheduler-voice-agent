@@ -308,14 +308,14 @@ class DeepgramTTSService(TTSInterface):
             Cleaned text suitable for TTS
         """
         # Remove trailing punctuation (period, question mark, exclamation)
-        text = re.sub(r'[.!?]+\s*$', '', text)
+        text = re.sub(r"[.!?]+\s*$", "", text)
 
         # Replace mid-sentence punctuation with natural pauses (spaces)
         # Keep commas as they provide natural speech rhythm
-        text = re.sub(r'([.!?])\s+', ' ', text)
+        text = re.sub(r"([.!?])\s+", " ", text)
 
         # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text.strip()
 

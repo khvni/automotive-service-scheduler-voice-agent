@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI):
 
     # Start background tasks for monitoring
     import asyncio
+
     from app.utils.background_tasks import startup_background_tasks
 
     asyncio.create_task(startup_background_tasks())

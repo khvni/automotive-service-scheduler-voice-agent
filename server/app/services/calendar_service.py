@@ -259,8 +259,11 @@ class CalendarService:
         # MOCK MODE: Return fake success
         if self.use_mock:
             import uuid
+
             fake_id = f"mock_{uuid.uuid4().hex[:16]}"
-            logger.warning(f"📅 MOCK: Pretending to create calendar event '{title}' (ID: {fake_id})")
+            logger.warning(
+                f"📅 MOCK: Pretending to create calendar event '{title}' (ID: {fake_id})"
+            )
             return {
                 "success": True,
                 "event_id": fake_id,
@@ -273,12 +276,19 @@ class CalendarService:
         metric = metrics_tracker.start_operation("create_event")
 
         try:
+
             async def _create_event():
                 service = self.get_calendar_service()
 
                 # Ensure times are timezone-aware
-                _start_time = start_time.replace(tzinfo=self.timezone) if start_time.tzinfo is None else start_time
-                _end_time = end_time.replace(tzinfo=self.timezone) if end_time.tzinfo is None else end_time
+                _start_time = (
+                    start_time.replace(tzinfo=self.timezone)
+                    if start_time.tzinfo is None
+                    else start_time
+                )
+                _end_time = (
+                    end_time.replace(tzinfo=self.timezone) if end_time.tzinfo is None else end_time
+                )
 
                 # Convert to UTC for API
                 start_time_utc = _start_time.astimezone(timezone.utc)
@@ -398,6 +408,7 @@ class CalendarService:
         metric = metrics_tracker.start_operation("update_event")
 
         try:
+
             async def _update_event():
                 service = self.get_calendar_service()
 
@@ -405,7 +416,8 @@ class CalendarService:
 
                 # Get existing event
                 event = await asyncio.get_event_loop().run_in_executor(
-                    None, lambda: service.events().get(calendarId="primary", eventId=event_id).execute()
+                    None,
+                    lambda: service.events().get(calendarId="primary", eventId=event_id).execute(),
                 )
 
                 # Update provided fields
@@ -417,8 +429,16 @@ class CalendarService:
                 # Update time if both start and end provided
                 if start_time and end_time:
                     # Ensure times are timezone-aware
-                    _start_time = start_time.replace(tzinfo=self.timezone) if start_time.tzinfo is None else start_time
-                    _end_time = end_time.replace(tzinfo=self.timezone) if end_time.tzinfo is None else end_time
+                    _start_time = (
+                        start_time.replace(tzinfo=self.timezone)
+                        if start_time.tzinfo is None
+                        else start_time
+                    )
+                    _end_time = (
+                        end_time.replace(tzinfo=self.timezone)
+                        if end_time.tzinfo is None
+                        else end_time
+                    )
 
                     # Convert to UTC for API
                     start_time_utc = _start_time.astimezone(timezone.utc)
@@ -507,6 +527,7 @@ class CalendarService:
         metric = metrics_tracker.start_operation("delete_event")
 
         try:
+
             async def _cancel_event():
                 service = self.get_calendar_service()
 

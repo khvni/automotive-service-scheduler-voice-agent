@@ -356,9 +356,7 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
                 }
             )
 
-        logger.info(
-            f"Found {len(formatted_slots)} available slots from Google Calendar for {date}"
-        )
+        logger.info(f"Found {len(formatted_slots)} available slots from Google Calendar for {date}")
 
         return {
             "success": True,
