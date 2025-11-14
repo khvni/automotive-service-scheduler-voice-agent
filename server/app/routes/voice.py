@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Constants
+BARGE_IN_WORD_THRESHOLD = 3  # Minimum words to trigger barge-in (prevents "uh", "um" false positives)
+
 
 # System prompt for the AI assistant
 SYSTEM_PROMPT = """You are Sophie, a friendly and professional receptionist at Otto's Auto,
@@ -392,10 +395,10 @@ async def handle_media_stream(websocket: WebSocket):
                     # Handle interim results (barge-in detection)
                     if transcript_type == "interim":
                         if is_speaking:
-                            # Debounce: Only trigger barge-in if transcript has 3+ words
+                            # Debounce: Only trigger barge-in if transcript has enough words
                             # This prevents false positives from "uh", "um", background noise
                             word_count = len(transcript_text.split())
-                            if word_count >= 3:
+                            if word_count >= BARGE_IN_WORD_THRESHOLD:
                                 logger.info(f"BARGE-IN DETECTED: User spoke while AI was speaking ({word_count} words)")
 
                                 # Clear Twilio audio playback immediately
@@ -406,12 +409,15 @@ async def handle_media_stream(websocket: WebSocket):
                                 # Clear TTS audio queue
                                 await tts.clear()
 
+                                # Clear audio buffer to prevent buffered audio from being sent
+                                audio_buffer.clear()
+
                                 # Stop speaking flag
                                 is_speaking = False
 
                                 logger.info("Audio cleared for barge-in")
                             else:
-                                logger.debug(f"Ignoring interim with {word_count} words (threshold: 3)")
+                                logger.debug(f"Ignoring interim with {word_count} words (threshold: {BARGE_IN_WORD_THRESHOLD})")
 
                     # Handle final transcripts (complete utterances)
                     elif transcript_type == "final" and transcript_data.get("speech_final"):
@@ -447,7 +453,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                                         # Track TTS first byte
                                         if chunks_sent == 1:
-                                            metrics.record_tts_first_byte()
+                                            metrics.track_tts_first_byte()
 
                                         # Send audio to Twilio (base64 encode mulaw)
                                         await websocket.send_text(
@@ -481,7 +487,7 @@ async def handle_media_stream(websocket: WebSocket):
                             if event["type"] == "content_delta":
                                 # Track first token latency
                                 if not first_token_tracked:
-                                    metrics.record_llm_first_token()
+                                    metrics.track_llm_first_token()
                                     first_token_tracked = True
 
                                 # Accumulate chunks and send sentences as they complete
@@ -492,14 +498,10 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 # Enhanced sentence detection: Check if buffer ENDS with punctuation
                                 # This ensures we send complete thoughts, not mid-sentence
-                                if sentence_buffer.strip() and sentence_buffer.rstrip()[-1:] in ".!?:;":
-                                    logger.info(f"[VOICE] Sending to TTS: '{sentence_buffer[:100]}...'")
-
-                                    # Start tracking TTS latency before first send
-                                    if not metrics.tts_start_time:
-                                        metrics.start_tts()
-
-                                    await tts.send_text(sentence_buffer.strip())
+                                stripped_buffer = sentence_buffer.strip()
+                                if stripped_buffer and stripped_buffer[-1] in ".!?:;":
+                                    logger.info(f"[VOICE] Sending to TTS: '{stripped_buffer[:100]}...'")
+                                    await tts.send_text(stripped_buffer)
                                     sentence_buffer = ""
 
                             elif event["type"] == "tool_call":
@@ -542,8 +544,8 @@ async def handle_media_stream(websocket: WebSocket):
                         # Log performance metrics
                         perf_data = metrics.get_metrics()
                         logger.info(
-                            f"[PERFORMANCE] LLM TTFT: {perf_data.get('llm_first_token_ms', 'N/A')}ms | "
-                            f"TTS TTFB: {perf_data.get('tts_first_byte_ms', 'N/A')}ms"
+                            f"[PERFORMANCE] LLM TTFT: {perf_data.get('llm_time_to_first_token_ms', 'N/A')}ms | "
+                            f"TTS TTFB: {perf_data.get('tts_time_to_first_byte_ms', 'N/A')}ms"
                         )
 
                         # Reset metrics for next turn
