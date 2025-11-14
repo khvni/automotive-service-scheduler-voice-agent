@@ -104,7 +104,7 @@ class VoiceAgentTester:
             print("Call type: Appointment Reminder")
         else:
             webhook_url = f"{self.base_url}/api/v1/voice/incoming"
-            print("Call type: General/Inbound")
+            print("Call type: Outbound Call")
 
         print(f"Calling {self.to_number}...")
         print(f"Webhook: {webhook_url}")
