@@ -1,6 +1,6 @@
 # Automotive Voice Agent
 
-AI-powered voice agent for automotive dealership appointment booking and customer service.
+AI-powered voice assistant for automotive dealership appointment booking and customer service.
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
@@ -8,7 +8,7 @@ AI-powered voice agent for automotive dealership appointment booking and custome
 
 ## Overview
 
-Production-ready voice AI system for Otto's Auto that handles inbound appointment booking calls and automated outbound reminder calls. Features real-time speech processing, natural language understanding, and full CRM integration with sub-2-second latency.
+Production-ready voice AI system that handles inbound appointment booking calls and automated outbound reminder calls. Built with real-time speech processing, natural language understanding, and full CRM integration delivering sub-2-second latency.
 
 **Core Capabilities:**
 - Real-time voice conversations with barge-in support
@@ -102,7 +102,7 @@ Twilio Phone Network
    ```
 
    The automated setup script will:
-   - Validate Python version
+   - Validate Python version (3.11+)
    - Create virtual environment and install dependencies
    - Verify database and Redis connections
    - Run migrations and tests
@@ -114,20 +114,35 @@ Twilio Phone Network
    # Edit .env with your API keys and credentials
    ```
 
-3. Start services:
+3. Initialize database:
+   ```bash
+   python scripts/init_db.py
+   python scripts/seed_test_data.py  # Optional: Load sample data
+   ```
+
+4. Start services:
    ```bash
    # Development
    cd server && uvicorn app.main:app --reload
+
+   # Or use convenience script
+   ./scripts/start_dev.sh
 
    # Production (systemd)
    sudo systemctl start automotive-voice
    sudo systemctl start automotive-worker
    ```
 
-4. Verify health:
+5. Verify health:
    ```bash
-   curl http://localhost:8000/health
-   # {"status":"healthy","database":"connected","redis":"connected"}
+   curl http://localhost:8000/api/v1/health
+   # {"status":"healthy","service":"ai-automotive-scheduler"}
+
+   curl http://localhost:8000/api/v1/health/db
+   # {"status":"healthy","database":"connected"}
+
+   curl http://localhost:8000/api/v1/health/redis
+   # {"status":"healthy","redis":"connected"}
    ```
 
 ## Configuration
@@ -172,8 +187,14 @@ See `.env.example` for all available options.
 
 ### Health Check
 ```
-GET /health
-Response: {"status":"healthy","database":"connected","redis":"connected"}
+GET /api/v1/health
+Response: {"status":"healthy","service":"ai-automotive-scheduler"}
+
+GET /api/v1/health/db
+Response: {"status":"healthy","database":"connected"}
+
+GET /api/v1/health/redis
+Response: {"status":"healthy","redis":"connected"}
 ```
 
 ### Webhooks
@@ -205,6 +226,8 @@ See [docs/API.md](docs/API.md) for complete API reference.
 
 ## Testing
 
+### Unit & Integration Tests
+
 Run all tests:
 ```bash
 cd server
@@ -224,11 +247,30 @@ pytest --cov=app --cov-report=html
 open htmlcov/index.html
 ```
 
+Quick test (format + lint + tests):
+```bash
+./scripts/quick_test.sh
+```
+
 **Test Summary:**
 - 100+ tests covering all features
 - Integration tests for voice flows and CRM tools
 - Load tests for concurrency and scalability
 - Security tests for input validation and data isolation
+
+### Functional Demos
+
+Run interactive demonstrations to verify end-to-end functionality:
+
+```bash
+# Demo 1: Inbound call - Customer books appointment
+python demos/demo_1_inbound_call.py
+
+# Demo 2: Outbound reminder call with rescheduling
+python demos/demo_2_outbound_reminder.py
+```
+
+See [demos/README.md](demos/README.md) for detailed demo documentation.
 
 ## Performance Benchmarks
 
@@ -277,46 +319,80 @@ See [docs/production-checklist.md](docs/production-checklist.md) for 100+ pre-la
 
 ```
 automotive-voice/
-├── server/                 # FastAPI application
+├── server/                     # FastAPI application
 │   ├── app/
-│   │   ├── core/           # Config, database, dependencies
-│   │   ├── models/         # SQLAlchemy models
-│   │   ├── routes/         # API routes and WebSocket handler
-│   │   ├── services/       # STT, TTS, OpenAI, Redis, DB services
-│   │   ├── tools/          # CRM tools (7 function calling tools)
-│   │   └── integrations/   # External API integrations
-│   ├── tests/              # Test suite (100+ tests)
-│   ├── Dockerfile
-│   └── requirements.txt
-├── worker/                 # Background worker for cron jobs
-│   ├── jobs/               # Scheduled tasks
-│   ├── Dockerfile
-│   └── requirements.txt
-├── web/                    # Web dashboard (optional)
-├── scripts/                # Utility scripts
-│   ├── production_setup.sh
-│   ├── init_db.py
-│   └── generate_mock_data.py
-├── docs/                   # Documentation
-│   ├── API.md
-│   ├── ARCHITECTURE.md
-│   ├── deployment.md
-│   ├── production-checklist.md
-│   └── prd.md
-├── infra/                  # Infrastructure configs
-├── .github/                # GitHub Actions workflows
+│   │   ├── models/             # SQLAlchemy models (Customer, Vehicle, Appointment)
+│   │   ├── routes/             # API routes (health, voice, webhooks)
+│   │   ├── services/           # Core services (STT, TTS, OpenAI, Redis, DB)
+│   │   ├── tools/              # CRM tools (crm_tools.py, calendar_tools.py, vin_tools.py)
+│   │   ├── utils/              # Utilities (call_logger.py)
+│   │   ├── config.py           # Configuration management
+│   │   └── main.py             # FastAPI application entry point
+│   ├── tests/                  # Test suite (integration, load, security)
+│   ├── requirements.txt
+│   └── Dockerfile
+├── worker/                     # Background worker for scheduled tasks
+│   ├── jobs/
+│   │   └── reminder_job.py     # Appointment reminder job
+│   ├── config.py
+│   ├── main.py
+│   ├── requirements.txt
+│   └── Dockerfile
+├── demos/                      # Functional demonstrations
+│   ├── demo_1_inbound_call.py  # Inbound booking demo
+│   ├── demo_2_outbound_reminder.py
+│   ├── README.md               # Demo documentation
+│   └── QUICKSTART.md
+├── scripts/                    # Utility scripts
+│   ├── production_setup.sh     # Automated production setup
+│   ├── setup.sh
+│   ├── start_dev.sh
+│   ├── init_db.py              # Database initialization
+│   ├── seed_test_data.py
+│   ├── generate_mock_crm_data.py
+│   ├── load_customer_data.py
+│   ├── update_twilio_webhook.py
+│   ├── test_voice_calls.py
+│   ├── format_code.sh          # Code formatting (black, isort)
+│   ├── check_code_quality.sh   # Linting (flake8, mypy, bandit)
+│   └── run_demo*.sh            # Demo runners
+├── tests/                      # Root-level tests
+├── docs/                       # Documentation
+│   ├── API.md                  # API reference
+│   ├── ARCHITECTURE.md         # System architecture
+│   ├── CONTRIBUTING.md         # Contribution guidelines
+│   ├── deployment.md           # Deployment guides
+│   ├── local-testing-guide.md  # Local testing instructions
+│   ├── production-checklist.md # Pre-launch checklist
+│   └── render-deployment.md    # Render-specific deployment
+├── deployment/                 # Deployment configurations
+├── web/                        # Web dashboard (React/Next.js)
+├── venv-new/                   # Python virtual environment
+├── .github/                    # GitHub Actions workflows
+├── .env.example                # Environment template
 ├── docker-compose.yml
 ├── Makefile
+├── pyproject.toml              # Python project config
+├── pytest.ini                  # Pytest configuration
+├── mypy.ini                    # Type checking config
 └── README.md
 ```
+
+> **Note:** The `YOUR PATH/` directory is used by coding agents for temporary documentation and should remain gitignored to prevent accidental commits.
 
 ## Development
 
 ### Code Quality
 ```bash
-# Format and lint
+# Format code
+./scripts/format_code.sh
+# Or manually:
 black server/app/ worker/
 isort server/app/ worker/
+
+# Check code quality (linting + type checking + security)
+./scripts/check_code_quality.sh
+# Or manually:
 flake8 server/app/ worker/
 mypy server/app/
 bandit -r server/app/
@@ -380,19 +456,27 @@ During testing, set `YOUR_TEST_NUMBER` in `.env` to restrict outbound calls to a
 
 ## Contributing
 
-This is a private project for Otto's Auto. If contributing:
+This is a private project. If contributing:
 
 1. Follow existing code style (Black, isort)
 2. Write tests for new features
 3. Update documentation
-4. Run pre-commit hooks
+4. Run pre-commit hooks before committing
 5. Ensure all tests pass
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
 
+### Important: Development Documentation
+
+**For Coding Agents:**
+- Temporary progress tracking files may be created in `YOUR PATH/` directory
+- This directory is gitignored and should NEVER be committed
+- Use this space for analysis, logs, and temporary documentation
+- Clean documentation belongs in `docs/` directory only
+
 ## License
 
-Proprietary - Otto's Auto
+Proprietary
 
 ## Support
 
