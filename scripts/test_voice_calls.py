@@ -25,6 +25,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "server"))
 from twilio.rest import Client
 
 from app.config import settings
+from app.models.appointment import Appointment
+from app.services.database import get_db
+from sqlalchemy import select
 
 
 class VoiceAgentTester:
@@ -86,12 +89,13 @@ class VoiceAgentTester:
         print()
         print("=" * 70)
 
-    def make_outbound_call(self, call_type: str = "general"):
+    def make_outbound_call(self, call_type: str = "general", appointment_id: int = None):
         """
         Initiate an outbound call to YOUR_TEST_NUMBER.
 
         Args:
             call_type: Type of call - 'general' or 'reminder'
+            appointment_id: Optional appointment ID for contextualized greeting
         """
         print("=" * 70)
         print("OUTBOUND CALL TEST")
@@ -104,7 +108,12 @@ class VoiceAgentTester:
             print("Call type: Appointment Reminder")
         else:
             webhook_url = f"{self.base_url}/api/v1/voice/incoming"
-            print("Call type: Outbound Call")
+            # Add appointment_id if provided for contextualized greeting
+            if appointment_id:
+                webhook_url += f"?appointment_id={appointment_id}"
+                print("Call type: Outbound Call (Contextualized)")
+            else:
+                print("Call type: Outbound Call")
 
         print(f"Calling {self.to_number}...")
         print(f"Webhook: {webhook_url}")
@@ -235,6 +244,33 @@ class VoiceAgentTester:
             print()
 
 
+async def get_first_appointment() -> int:
+    """
+    Get the ID of the first upcoming appointment for contextualized greeting.
+
+    Returns:
+        Appointment ID or None if no appointments found
+    """
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+
+    try:
+        result = await db.execute(
+            select(Appointment)
+            .where(Appointment.scheduled_at > datetime.now())
+            .order_by(Appointment.scheduled_at)
+            .limit(1)
+        )
+        appointment = result.scalar_one_or_none()
+
+        if appointment:
+            return appointment.id
+        return None
+
+    finally:
+        await db.close()
+
+
 def print_usage():
     """Print usage instructions."""
     print("Voice Agent Testing Script")
@@ -245,7 +281,7 @@ def print_usage():
     print()
     print("Commands:")
     print("  inbound              Show instructions for testing inbound calls")
-    print("  outbound             Make an outbound call (general)")
+    print("  outbound             Make an outbound call (contextualized greeting)")
     print("  outbound-reminder    Make an outbound reminder call")
     print("  status <call_sid>    Check status of a specific call")
     print("  list [count]         List recent calls (default: 10)")
@@ -259,8 +295,8 @@ def print_usage():
     print()
 
 
-def main():
-    """Main entry point."""
+async def async_main():
+    """Async main entry point."""
     if len(sys.argv) < 2:
         print_usage()
         return
@@ -278,7 +314,15 @@ def main():
             tester.test_inbound_setup()
 
         elif command == "outbound":
-            tester.make_outbound_call("general")
+            # Get first upcoming appointment for contextualized greeting
+            appointment_id = await get_first_appointment()
+            if appointment_id:
+                print(f"ℹ️  Using appointment ID {appointment_id} for contextualized greeting")
+                print()
+            else:
+                print("⚠️  No upcoming appointments found - using generic greeting")
+                print()
+            tester.make_outbound_call("general", appointment_id=appointment_id)
 
         elif command == "outbound-reminder":
             tester.make_outbound_call("reminder")
@@ -320,6 +364,11 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
+
+
+def main():
+    """Synchronous wrapper for async_main."""
+    asyncio.run(async_main())
 
 
 if __name__ == "__main__":

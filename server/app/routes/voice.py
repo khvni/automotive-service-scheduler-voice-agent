@@ -116,11 +116,17 @@ async def handle_incoming_call(request: Request):
     """
     Twilio webhook for incoming calls (both inbound and outbound).
     Returns TwiML to establish WebSocket connection.
+
+    Query Parameters:
+        appointment_id (optional): ID of appointment for contextualized outbound greetings
     """
     # Get form data from Twilio webhook
     form_data = await request.form()
     call_direction = form_data.get("Direction", "inbound")  # "inbound" or "outbound-api"
     caller_number = form_data.get("From", "")
+
+    # Get optional appointment_id from query parameters
+    appointment_id = request.query_params.get("appointment_id", "")
 
     # Strip protocol from BASE_URL to construct proper WebSocket URL
     ws_url = f"wss://{settings.BASE_URL.replace('https://', '').replace('http://', '')}/api/v1/voice/media-stream"
@@ -137,6 +143,7 @@ async def handle_incoming_call(request: Request):
             <Parameter name="is_outbound" value="true"/>
             <Parameter name="direction" value="{call_direction}"/>
             <Parameter name="From" value="{caller_number}"/>
+            <Parameter name="appointment_id" value="{appointment_id}"/>
         </Stream>
     </Connect>
 </Response>"""
@@ -369,8 +376,47 @@ async def handle_media_stream(websocket: WebSocket):
                             logger.info("Outbound call detected - sending initial greeting")
 
                             try:
-                                # Generate initial greeting
+                                # Check if appointment_id was provided for contextualized greeting
+                                appointment_id = custom_params.get("appointment_id", "")
                                 initial_message = "Hi, this is Sophie from Otto's Auto. Is this a good time to talk?"
+
+                                if appointment_id:
+                                    try:
+                                        # Fetch appointment details for contextualized greeting
+                                        from app.tools.crm_tools import get_appointment_details
+                                        from sqlalchemy import select
+                                        from app.models.appointment import Appointment
+                                        from app.models.vehicle import Vehicle
+                                        from app.models.customer import Customer
+
+                                        # Query appointment with vehicle and customer
+                                        result = await db.execute(
+                                            select(Appointment, Vehicle, Customer)
+                                            .join(Vehicle, Appointment.vehicle_id == Vehicle.id)
+                                            .join(Customer, Appointment.customer_id == Customer.id)
+                                            .where(Appointment.id == int(appointment_id))
+                                        )
+                                        row = result.first()
+
+                                        if row:
+                                            appointment, vehicle, customer = row
+
+                                            # Format scheduled date/time
+                                            appt_date = appointment.scheduled_at.strftime("%A, %B %d")
+                                            appt_time = appointment.scheduled_at.strftime("%I:%M %p").lstrip("0")
+
+                                            # Create contextualized greeting
+                                            initial_message = (
+                                                f"Hi {customer.first_name}, this is Sophie from Otto's Auto. "
+                                                f"I'm calling about your upcoming {appointment.service_type.value.replace('_', ' ')} "
+                                                f"appointment for your {vehicle.year} {vehicle.make} {vehicle.model} "
+                                                f"scheduled for {appt_date} at {appt_time}. Is this a good time to talk?"
+                                            )
+                                            logger.info(f"Generated contextualized greeting for appointment {appointment_id}")
+                                        else:
+                                            logger.warning(f"Appointment {appointment_id} not found, using generic greeting")
+                                    except Exception as e:
+                                        logger.warning(f"Could not fetch appointment details: {e}, using generic greeting")
 
                                 # Send through TTS
                                 async for audio_chunk in tts.text_to_speech(initial_message):
