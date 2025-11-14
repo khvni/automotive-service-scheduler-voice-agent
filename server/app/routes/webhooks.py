@@ -107,10 +107,31 @@ async def handle_call_status(
     return {"status": "received"}
 
 
+@router.post("/status")
+async def status_callback(request: Request):
+    """
+    Twilio status callback webhook.
+    Receives call status updates (initiated, ringing, in-progress, completed, etc.)
+
+    This is the endpoint used by outbound calls made via test_voice_calls.py
+    """
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid")
+    call_status = form_data.get("CallStatus")
+    call_duration = form_data.get("CallDuration")
+
+    logger.info(f"Call status update - SID: {call_sid}, Status: {call_status}, Duration: {call_duration}s")
+
+    # Update call log in database
+    # Send to monitoring/analytics
+
+    return {"status": "received"}
+
+
 @router.post("/twilio/status")
 async def twilio_status_callback(request: Request):
     """
-    Twilio status callback webhook.
+    Alternative Twilio status callback webhook.
     Receives call status updates (ringing, in-progress, completed, etc.)
     """
     form_data = await request.form()

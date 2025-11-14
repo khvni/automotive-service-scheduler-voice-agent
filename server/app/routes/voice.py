@@ -101,8 +101,8 @@ async def handle_incoming_call():
     Twilio webhook for incoming calls.
     Returns TwiML to establish WebSocket connection.
     """
-    # TODO: Update with actual domain (from environment variable)
-    ws_url = f"wss://{settings.BASE_URL}/api/v1/voice/media-stream"
+    # Strip protocol from BASE_URL to construct proper WebSocket URL
+    ws_url = f"wss://{settings.BASE_URL.replace('https://', '').replace('http://', '')}/api/v1/voice/media-stream"
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>

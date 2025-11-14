@@ -222,7 +222,7 @@ class VoiceAgentTester:
             for call in calls:
                 duration = f"{call.duration}s" if call.duration else "N/A"
                 print(f"• {call.sid}")
-                print(f"  {call.direction.upper()}: {call.from_} → {call.to}")
+                print(f"  {call.direction.upper()}: {call.from_formatted} → {call.to_formatted}")
                 print(f"  Status: {call.status} | Duration: {duration}")
                 print(f"  Time: {call.start_time or call.date_created}")
                 print()
