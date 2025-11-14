@@ -701,7 +701,13 @@ async def get_upcoming_appointments(db: AsyncSession, customer_id: int) -> Dict[
 
 async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str) -> Dict[str, Any]:
     """
-    Cancel an appointment.
+    Cancel an appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates appointment exists and is not already cancelled
+    2. Deletes the Google Calendar event (if calendar_event_id exists)
+    3. Updates appointment status to CANCELLED in database
+    4. Sends cancellation notification to attendees
 
     Args:
         db: Database session
@@ -720,9 +726,6 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str)
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will delete the corresponding Google Calendar event.
     """
     try:
         # Get appointment
@@ -743,6 +746,32 @@ async def cancel_appointment(db: AsyncSession, appointment_id: int, reason: str)
                 "error": "Appointment is already cancelled",
                 "message": "Appointment is already cancelled",
             }
+
+        # Delete calendar event if it exists
+        if appointment.calendar_event_id:
+            from app.config import settings
+            from app.services.calendar_service import CalendarService
+
+            calendar = CalendarService(
+                client_id=settings.GOOGLE_CLIENT_ID,
+                client_secret=settings.GOOGLE_CLIENT_SECRET,
+                refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+                timezone_name=settings.CALENDAR_TIMEZONE,
+            )
+
+            calendar_result = await calendar.cancel_calendar_event(
+                event_id=appointment.calendar_event_id
+            )
+
+            if not calendar_result["success"]:
+                logger.warning(
+                    f"Failed to cancel calendar event {appointment.calendar_event_id}: {calendar_result['message']}"
+                )
+                # Continue with DB update even if calendar deletion fails
+            else:
+                logger.info(
+                    f"Calendar event {appointment.calendar_event_id} cancelled successfully"
+                )
 
         # Update appointment
         appointment.status = AppointmentStatus.CANCELLED
