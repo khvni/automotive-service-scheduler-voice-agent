@@ -17,11 +17,11 @@ Production-ready voice AI system that handles inbound appointment booking calls 
 - Automated 24-hour reminder calls
 - Multi-flow conversation handling (booking, rescheduling, inquiries)
 
-**Recent Enhancements (commits 36fbcae..57c3f01):**
-- **Full Google Calendar Integration**: Real-time availability checks, automatic event creation/updates/cancellation
-- **Enhanced Reliability**: Retry logic with exponential backoff, comprehensive error handling, and mock calendar fallback
-- **OAuth Automation**: Automated refresh token generation script for seamless calendar authentication
-- **Health Monitoring**: Calendar service health checks with detailed metrics and performance tracking
+**Key Features:**
+- **Full Google Calendar Integration**: Real-time availability checks, automatic event creation/updates/cancellation with retry logic and mock fallback
+- **Production-Ready Reliability**: Comprehensive error handling, health monitoring, and automated testing environment
+- **OAuth Automation**: Automated refresh token generation for seamless calendar authentication
+- **Developer Experience**: Pre-commit hooks, comprehensive test suite, and automated setup scripts
 
 ## Architecture
 
@@ -258,9 +258,13 @@ pytest --cov=app --cov-report=html
 open htmlcov/index.html
 ```
 
-Quick test (format + lint + tests):
+**Automated Test Environment:**
 ```bash
-./scripts/quick_test.sh
+# Run server with mock calendar in isolated environment
+./scripts/run_test_environment.sh
+
+# In another terminal, run tests
+cd server && pytest tests/ -v
 ```
 
 **Test Summary:**
@@ -268,6 +272,7 @@ Quick test (format + lint + tests):
 - Integration tests for voice flows and CRM tools
 - Load tests for concurrency and scalability
 - Security tests for input validation and data isolation
+- Mock calendar fallback for testing without Google OAuth
 
 ### Functional Demos
 
@@ -356,7 +361,7 @@ automotive-voice/
 │   └── QUICKSTART.md
 ├── scripts/                    # Utility scripts
 │   ├── production_setup.sh     # Automated production setup
-│   ├── setup.sh
+│   ├── run_test_environment.sh # Isolated test environment with mock calendar
 │   ├── start_dev.sh
 │   ├── init_db.py              # Database initialization
 │   ├── seed_test_data.py
@@ -366,8 +371,7 @@ automotive-voice/
 │   ├── test_voice_calls.py
 │   ├── generate_google_refresh_token.py  # Google OAuth token generator
 │   ├── format_code.sh          # Code formatting (black, isort)
-│   ├── check_code_quality.sh   # Linting (flake8, mypy, bandit)
-│   └── run_demo*.sh            # Demo runners
+│   └── check_code_quality.sh   # Linting (flake8, mypy, bandit)
 ├── tests/                      # Root-level tests
 ├── docs/                       # Documentation
 │   ├── API.md                  # API reference
@@ -395,23 +399,34 @@ automotive-voice/
 ## Development
 
 ### Code Quality
+
+**Pre-commit Hooks (Recommended):**
+```bash
+# Install hooks (one-time setup)
+pre-commit install
+
+# Runs automatically on git commit, or manually:
+pre-commit run --all-files
+```
+
+Hooks enforce:
+- Code formatting (Black, isort)
+- Secret detection (detect-secrets)
+- Security scanning (Bandit)
+- Markdown/YAML formatting (Prettier)
+- Trailing whitespace and EOL fixes
+
+**Manual Tools:**
 ```bash
 # Format code
-./scripts/format_code.sh
-# Or manually:
 black server/app/ worker/
 isort server/app/ worker/
 
-# Check code quality (linting + type checking + security)
-./scripts/check_code_quality.sh
-# Or manually:
-flake8 server/app/ worker/
+# Type checking
 mypy server/app/
-bandit -r server/app/
 
-# Pre-commit hooks
-pre-commit install
-pre-commit run --all-files
+# Security scan
+bandit -r server/app/
 ```
 
 ### Database Migrations
