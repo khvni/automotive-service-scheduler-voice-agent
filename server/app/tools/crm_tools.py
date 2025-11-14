@@ -244,8 +244,9 @@ async def search_customers_by_name(
 
 async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str, Any]:
     """
-    Get available appointment slots for a given date (POC mock implementation).
+    Get available appointment slots from Google Calendar for a specific date.
 
+    This function now ACTUALLY checks Google Calendar via CalendarService.
     Business hours:
     - Monday-Friday: 9 AM - 5 PM (excluding 12-1 PM lunch)
     - Saturday: 9 AM - 3 PM (excluding 12-1 PM lunch)
@@ -253,26 +254,32 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
 
     Args:
         date: Date string in YYYY-MM-DD format
-        duration_minutes: Slot duration in minutes (default: 30)
+        duration_minutes: Minimum slot duration in minutes (default: 30)
 
     Returns:
-        Dict with available slots:
+        Dict with available slots from actual Google Calendar:
             {
                 "success": True,
                 "date": str,
                 "day_of_week": str,
-                "available_slots": [str] (ISO timestamps),
+                "available_slots": [
+                    {
+                        "start": str (ISO format),
+                        "end": str (ISO format),
+                        "start_time": str (12-hour format),
+                        "end_time": str (12-hour format)
+                    }
+                ],
+                "count": int,
                 "message": str
             }
-
-    Raises:
-        ValueError: If date format is invalid
-
-    Note:
-        This is a POC mock implementation. Feature 7 will integrate with
-        Google Calendar to check actual availability.
     """
     try:
+        from zoneinfo import ZoneInfo
+
+        from app.config import settings
+        from app.services.calendar_service import CalendarService
+
         # Parse and validate date
         slot_date = datetime.fromisoformat(date).date()
         day_of_week = slot_date.strftime("%A")
@@ -284,45 +291,61 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
                 "date": date,
                 "day_of_week": day_of_week,
                 "available_slots": [],
+                "count": 0,
                 "message": "We are closed on Sundays",
             }
 
-        # Determine business hours
+        # Determine business hours based on day of week
         if slot_date.weekday() < 5:  # Monday-Friday
             start_hour, end_hour = 9, 17  # 9 AM - 5 PM
         else:  # Saturday
             start_hour, end_hour = 9, 15  # 9 AM - 3 PM
 
-        # Generate slots
-        slots = []
-        current_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=start_hour, tzinfo=timezone.utc
+        # Initialize calendar service
+        calendar = CalendarService(
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
+            refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+            timezone_name=settings.CALENDAR_TIMEZONE,
+        )
+
+        # Create timezone-aware datetime for the day
+        tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+        start_time = datetime.combine(slot_date, datetime.min.time()).replace(
+            hour=start_hour, minute=0, second=0, microsecond=0, tzinfo=tz
         )
         end_time = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=end_hour, tzinfo=timezone.utc
-        )
-        lunch_start = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=12, tzinfo=timezone.utc
-        )
-        lunch_end = datetime.combine(slot_date, datetime.min.time()).replace(
-            hour=13, tzinfo=timezone.utc
+            hour=end_hour, minute=0, second=0, microsecond=0, tzinfo=tz
         )
 
-        while current_time < end_time:
-            # Skip lunch hour (12 PM - 1 PM)
-            if not (lunch_start <= current_time < lunch_end):
-                slots.append(current_time.isoformat())
+        # Get free slots from Google Calendar (ACTUAL CALL!)
+        free_slots = await calendar.get_free_availability(
+            start_time=start_time, end_time=end_time, duration_minutes=duration_minutes
+        )
 
-            current_time += timedelta(minutes=duration_minutes)
+        # Format slots for response
+        formatted_slots = []
+        for slot in free_slots:
+            formatted_slots.append(
+                {
+                    "start": slot["start"].isoformat(),
+                    "end": slot["end"].isoformat(),
+                    "start_time": slot["start"].strftime("%I:%M %p"),
+                    "end_time": slot["end"].strftime("%I:%M %p"),
+                }
+            )
 
-        logger.info(f"Generated {len(slots)} available slots for {date}")
+        logger.info(
+            f"Found {len(formatted_slots)} available slots from Google Calendar for {date}"
+        )
 
         return {
             "success": True,
             "date": date,
             "day_of_week": day_of_week,
-            "available_slots": slots,
-            "message": f"Found {len(slots)} available time slots",
+            "available_slots": formatted_slots,
+            "count": len(formatted_slots),
+            "message": f"Found {len(formatted_slots)} available time slots",
         }
 
     except ValueError as e:
@@ -333,8 +356,12 @@ async def get_available_slots(date: str, duration_minutes: int = 30) -> Dict[str
             "message": "Invalid date format",
         }
     except Exception as e:
-        logger.error(f"Error generating slots for {date}: {e}", exc_info=True)
-        return {"success": False, "error": str(e), "message": "Error generating available slots"}
+        logger.error(f"Error getting calendar availability for {date}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Error checking calendar availability",
+        }
 
 
 # ============================================================================
