@@ -9,6 +9,7 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
+from app.utils.retry import with_retry
 from deepgram import DeepgramClient, DeepgramClientOptions, LiveOptions, LiveTranscriptionEvents
 
 logger = logging.getLogger(__name__)
@@ -80,28 +81,12 @@ class DeepgramSTTService:
         Raises:
             Exception: If connection fails after all retries
         """
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                await self._attempt_connection()
-                logger.info(f"Connected to Deepgram STT on attempt {attempt + 1}/{max_retries}")
-                return
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"STT connection attempt {attempt + 1}/{max_retries} failed: {e}"
-                )
-
-                if attempt < max_retries - 1:
-                    delay = backoff_factor ** attempt
-                    logger.info(f"Retrying STT connection in {delay:.1f}s...")
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(f"STT connection failed after {max_retries} attempts")
-
-        # All retries exhausted
-        raise Exception(f"Failed to connect to Deepgram STT after {max_retries} attempts: {last_error}")
+        await with_retry(
+            self._attempt_connection,
+            max_retries=max_retries,
+            backoff_factor=backoff_factor,
+            operation_name="Deepgram STT Connection"
+        )
 
     async def _attempt_connection(self) -> None:
         """
