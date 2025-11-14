@@ -26,39 +26,44 @@ Production-ready voice AI system that handles inbound appointment booking calls 
 ## Architecture
 
 ```
-Twilio Phone Network
-        │
-        ├─ WebSocket Media Stream (mulaw @ 8kHz)
-        ▼
-┌────────────────────────────────────┐
-│     FastAPI Server                 │
-│  ┌──────────┬──────────┬────────┐ │
-│  │ Deepgram │  OpenAI  │Deepgram│ │
-│  │   STT    │  GPT-4o  │  TTS   │ │
-│  └────┬─────┴────┬─────┴────┬───┘ │
-│       │          │          │     │
-│       └──────────┼──────────┘     │
-│                  │                │
-│         ┌────────▼────────┐       │
-│         │   CRM Tools     │       │
-│         │  (7 functions)  │       │
-│         └────────┬────────┘       │
-└──────────────────┼────────────────┘
-                   │
-        ┌──────────┴──────────┐
-        ▼                     ▼
-   ┌─────────┐        ┌──────────────┐
-   │  Redis  │        │  PostgreSQL  │
-   │ Session │        │   Customer   │
-   │  Cache  │        │   Vehicle    │
-   └─────────┘        │ Appointment  │
-                      └──────┬───────┘
-                             │
-                             ▼
-                      ┌──────────────┐
-                      │    Google    │
-                      │   Calendar   │
-                      └──────────────┘
+                    Twilio Phone Network
+                            │
+                  WebSocket ↕ (mulaw @ 8kHz)
+                            │
+        ┌───────────────────┴───────────────────┐
+        │         FastAPI Server                │
+        │                                       │
+        │   ┌───────────────────────────────┐   │
+        │   │  WebSocket Media Handler      │   │
+        │   │                               │   │
+        │   │  Audio ──→ Deepgram STT       │   │
+        │   │              │                │   │
+        │   │              ↓ (transcript)   │   │
+        │   │           OpenAI GPT-4o       │   │
+        │   │              │                │   │
+        │   │              ↓ (response)     │   │
+        │   │           Deepgram TTS        │   │
+        │   │              │                │   │
+        │   │              ↓ (audio)        │   │
+        │   │           To Twilio           │   │
+        │   └───────────────┬───────────────┘   │
+        │                   │                   │
+        │           ┌───────▼──────────┐        │
+        │           │    CRM Tools     │        │
+        │           │  (7 functions)   │        │
+        │           └───────┬──────────┘        │
+        └───────────────────┼───────────────────┘
+                            │
+                 ┌──────────┼──────────┐
+                 ↓          ↓          ↓
+            ┌────────┐  ┌────────┐  ┌──────────┐
+            │ Redis  │  │Postgres│  │  Google  │
+            │ Cache  │  │   DB   │  │ Calendar │
+            └────────┘  └────────┘  └──────────┘
+                         │      │
+                      Customers │
+                      Vehicles  │
+                      Appointments
 ```
 
 ## Technology Stack
