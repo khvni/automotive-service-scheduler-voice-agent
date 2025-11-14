@@ -59,16 +59,16 @@ async def seed_data():
 
         print("\n📋 Creating test customers...")
 
-        # Customer 1: Ali Khani (the classic 2001 Honda Odyssey owner)
+        # Customer 1: Ali Khani (2019 Honda CR-V owner)
         customer1 = Customer(
             phone_number="+14086137788",  # Ali's test number
-            email="ali.khani@example.com",
+            email="byalikhani@gmail.com",
             first_name="Ali",
             last_name="Khani",
             street_address="123 Main Street",
-            city="Austin",
-            state="TX",
-            zip_code="78701",
+            city="San Jose",
+            state="CA",
+            zip_code="95110",
             customer_since=datetime.now().date() - timedelta(days=730),  # Customer for 2 years
             customer_type="retail",
             preferred_contact_method="phone",
@@ -81,16 +81,16 @@ async def seed_data():
         # Ali's vehicles
         vehicle1 = Vehicle(
             customer_id=customer1.id,
-            vin="JH4DB7560SS000123",
+            vin="2HKRM4H77KH123456",
             license_plate="ABC1234",
-            year=2001,
+            year=2019,
             make="Honda",
-            model="Odyssey",
+            model="CR-V",
             trim="EX",
             color="Silver",
-            current_mileage=152000,
+            current_mileage=45000,
             last_service_date=(datetime.now() - timedelta(days=45)).date(),
-            last_service_mileage=150000,
+            last_service_mileage=44000,
             is_primary_vehicle=True,
         )
         db.add(vehicle1)
@@ -273,7 +273,7 @@ async def seed_data():
         print(f"   - 5 vehicles created")
         print(f"   - 3 upcoming appointments created")
         print(f"\n💡 Test by calling:")
-        print(f"   - Your number (+14086137788) for Ali Khani's 2001 Honda Odyssey")
+        print(f"   - Your number (+14086137788) for Ali Khani's 2019 Honda CR-V")
         print(f"   - Run outbound test to get appointment reminder call")
 
     except Exception as e:

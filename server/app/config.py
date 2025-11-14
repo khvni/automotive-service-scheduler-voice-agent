@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REFRESH_TOKEN: str = ""
-    CALENDAR_TIMEZONE: str = "America/New_York"
+    CALENDAR_TIMEZONE: str = "America/Los_Angeles"
 
     # VIN API
     NHTSA_API_URL: str = "https://vpic.nhtsa.dot.gov/api"
