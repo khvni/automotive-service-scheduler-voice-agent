@@ -612,6 +612,31 @@ async def handle_media_stream(websocket: WebSocket):
                         # Wait for audio streaming to complete
                         await audio_task
 
+                        # Detect conversation end (goodbye detection)
+                        goodbye_phrases = [
+                            "goodbye", "bye", "thank you bye", "thanks bye",
+                            "have a good day", "talk to you later", "see you",
+                            "have a great day", "take care"
+                        ]
+                        if any(phrase in response_text.lower() for phrase in goodbye_phrases):
+                            logger.info(f"[VOICE] Goodbye detected in response - ending call in 2 seconds")
+                            await asyncio.sleep(2)  # Let final message finish playing
+
+                            # Send hangup event to Twilio
+                            try:
+                                await websocket.send_text(
+                                    json.dumps({
+                                        "event": "hangup",
+                                        "streamSid": stream_sid
+                                    })
+                                )
+                                logger.info(f"[VOICE] Hangup event sent to Twilio")
+                            except Exception as e:
+                                logger.error(f"[VOICE] Failed to send hangup event: {e}")
+
+                            # Exit the transcript processing loop
+                            break
+
                         # Log performance metrics
                         perf_data = metrics.get_metrics()
                         logger.info(
