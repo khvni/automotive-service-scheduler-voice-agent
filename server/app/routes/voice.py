@@ -358,8 +358,71 @@ async def handle_media_stream(websocket: WebSocket):
                             },
                         )
 
-                        # Personalize system prompt if customer exists
-                        if caller_phone:
+                        # Check if this is an outbound reminder call
+                        call_type = custom_params.get("call_type", "")
+                        appointment_id_param = custom_params.get("appointment_id", "")
+
+                        if call_type == "outbound_reminder" and appointment_id_param:
+                            # Build reminder-specific system prompt with appointment context
+                            try:
+                                from app.services.system_prompts import build_outbound_reminder_prompt
+                                from app.models.appointment import Appointment
+                                from app.models.vehicle import Vehicle
+                                from app.models.customer import Customer
+                                from sqlalchemy import select
+
+                                # Parse appointment_id
+                                appt_id = int(appointment_id_param)
+
+                                # Query appointment with vehicle and customer
+                                result = await db.execute(
+                                    select(Appointment, Vehicle, Customer)
+                                    .join(Vehicle, Appointment.vehicle_id == Vehicle.id)
+                                    .join(Customer, Appointment.customer_id == Customer.id)
+                                    .where(Appointment.id == appt_id)
+                                )
+                                row = result.first()
+
+                                if row:
+                                    appointment, vehicle, customer = row
+
+                                    # Format appointment details for prompt
+                                    customer_name = f"{customer.first_name} {customer.last_name}"
+                                    service_type = appointment.service_type.value.replace('_', ' ')
+
+                                    # Format appointment time
+                                    now = datetime.now()
+                                    appt_datetime = appointment.scheduled_at
+
+                                    # Determine relative time
+                                    days_diff = (appt_datetime.date() - now.date()).days
+                                    if days_diff == 0:
+                                        time_desc = "today"
+                                    elif days_diff == 1:
+                                        time_desc = "tomorrow"
+                                    else:
+                                        time_desc = appt_datetime.strftime("%A, %B %d")
+
+                                    formatted_time = f"{time_desc} at {appt_datetime.strftime('%I:%M %p').lstrip('0')}"
+                                    vehicle_desc = f"{vehicle.year} {vehicle.make} {vehicle.model}"
+
+                                    # Build reminder prompt with context
+                                    reminder_prompt = build_outbound_reminder_prompt(
+                                        customer_name=customer_name,
+                                        service_type=service_type,
+                                        appointment_time=formatted_time,
+                                        vehicle_description=vehicle_desc
+                                    )
+
+                                    openai.set_system_prompt(reminder_prompt)
+                                    logger.info(f"Set reminder system prompt for appointment {appt_id}")
+                                else:
+                                    logger.warning(f"Appointment {appt_id} not found for reminder call")
+                            except Exception as e:
+                                logger.error(f"Failed to build reminder prompt: {e}", exc_info=True)
+
+                        # Personalize system prompt if customer exists (for non-reminder calls)
+                        elif caller_phone:
                             try:
                                 from app.tools.crm_tools import lookup_customer
 
@@ -399,7 +462,45 @@ async def handle_media_stream(websocket: WebSocket):
                         # Proactive greeting improves UX and reduces awkward silence
                         call_direction = custom_params.get("direction", "inbound")
 
-                        if call_direction == "outbound" or custom_params.get("is_outbound") == "true":
+                        if call_type == "outbound_reminder":
+                            # OUTBOUND REMINDER CALL - Let the system prompt guide the greeting
+                            # The reminder prompt already has all the context, so use a simple greeting
+                            logger.info("Outbound reminder call detected - using context-aware greeting")
+
+                            try:
+                                # Simple greeting - the LLM will provide details based on system prompt
+                                initial_message = "Hi, this is Sophie from Otto's Auto. Is this a good time to talk about your upcoming appointment?"
+
+                                # Add initial greeting to conversation history
+                                openai.add_assistant_message(initial_message)
+
+                                # Send through TTS
+                                async for audio_chunk in tts.text_to_speech(initial_message):
+                                    if audio_chunk:
+                                        audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "media",
+                                                "streamSid": stream_sid,
+                                                "media": {"payload": audio_b64},
+                                            })
+                                        )
+
+                                        mark_label = str(uuid.uuid4())
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "mark",
+                                                "streamSid": stream_sid,
+                                                "mark": {"name": mark_label},
+                                            })
+                                        )
+                                        marks.append(mark_label)
+
+                                logger.info("Reminder greeting sent successfully")
+                            except Exception as e:
+                                logger.error(f"Failed to send reminder greeting: {e}", exc_info=True)
+
+                        elif call_direction == "outbound" or custom_params.get("is_outbound") == "true":
                             # OUTBOUND CALL - Appointment-specific greeting
                             logger.info("Outbound call detected - sending initial greeting")
 
