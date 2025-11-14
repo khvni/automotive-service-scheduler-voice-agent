@@ -309,7 +309,7 @@ Sent by Twilio when media streaming begins.
     "customParameters": {
       "From": "+15551234567",
       "To": "+15559876543",
-      "CallSid": "CA1234567890abcdef"
+      "CallSid": "CA1234567890abcdef"  // pragma: allowlist secret
     },
     "mediaFormat": {
       "encoding": "audio/x-mulaw",
@@ -432,8 +432,8 @@ Media streaming stopped.
   "event": "stop",
   "sequenceNumber": "500",
   "stop": {
-    "accountSid": "AC1234567890abcdef",
-    "callSid": "CA1234567890abcdef"
+    "accountSid": "AC1234567890abcdef",  // pragma: allowlist secret
+    "callSid": "CA1234567890abcdef"  // pragma: allowlist secret
   },
   "streamSid": "MZ1234567890abcdef"
 }

@@ -21,7 +21,7 @@ async def decode_vin(vin: str) -> Optional[Dict[str, Any]]:
 
     url = f"{settings.NHTSA_API_URL}/vehicles/DecodeVin/{vin}?format=json"
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(url)
 
         if response.status_code != 200:

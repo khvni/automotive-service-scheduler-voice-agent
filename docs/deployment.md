@@ -76,11 +76,11 @@ DEBUG=false
 
 # === Database ===
 DATABASE_URL=postgresql+asyncpg://user:password@host:5432/automotive_voice  # pragma: allowlist secret
-# For Neon: postgresql+asyncpg://user:password@host.neon.tech/automotive_voice?sslmode=require
+# For Neon: postgresql+asyncpg://user:password@host.neon.tech/automotive_voice?sslmode=require  # pragma: allowlist secret
 
 # === Redis ===
 REDIS_URL=redis://default:password@host:6379  # pragma: allowlist secret
-# For Upstash: rediss://default:password@host.upstash.io:6379
+# For Upstash: rediss://default:password@host.upstash.io:6379  # pragma: allowlist secret
 
 # === Twilio ===
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # pragma: allowlist secret
@@ -127,7 +127,7 @@ echo ".env" >> .gitignore
 2. **Configure Connection:**
    ```bash
    # In .env
-   DATABASE_URL=postgresql+asyncpg://user:password@host.neon.tech/automotive_voice?sslmode=require
+   DATABASE_URL=postgresql+asyncpg://user:password@host.neon.tech/automotive_voice?sslmode=require  # pragma: allowlist secret
    ```
 
 3. **Run Migrations:**
@@ -207,7 +207,7 @@ SELECT pg_reload_conf();
 
 ```bash
 # In .env
-REDIS_URL=rediss://default:password@host.upstash.io:6379
+REDIS_URL=rediss://default:password@host.upstash.io:6379  # pragma: allowlist secret
 ```
 
 **Redis Cloud:**

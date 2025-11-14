@@ -86,7 +86,10 @@ async def test_websocket_connection():
             "event": "stop",
             "sequenceNumber": "12",
             "streamSid": "MZ1234567890abcdef",
-            "stop": {"accountSid": "AC1234567890abcdef", "callSid": "CA1234567890abcdef"},
+            "stop": {
+                "accountSid": "AC1234567890abcdef",  # pragma: allowlist secret
+                "callSid": "CA1234567890abcdef",  # pragma: allowlist secret
+            },
         }
         websocket.send_json(stop_event)
         print("✓ Sent 'stop' event")

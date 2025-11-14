@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
 
     # Server
-    HOST: str = "0.0.0.0"
+    HOST: str = "0.0.0.0"  # nosec B104 - bind all interfaces for Docker/cloud
     PORT: int = 8000
 
     # Database
