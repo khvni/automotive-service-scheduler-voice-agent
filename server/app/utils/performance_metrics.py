@@ -75,6 +75,7 @@ class PerformanceMetrics:
         self.tts_start = 0
         self.first_llm_token = True
         self.first_audio_byte = True
+        self.metrics.clear()
 
     def get_metrics(self) -> dict:
         """Get current metrics."""
