@@ -381,7 +381,13 @@ async def book_appointment(
     notes: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Book a service appointment.
+    Book a service appointment in both database AND Google Calendar.
+
+    This function:
+    1. Validates customer and vehicle
+    2. Creates Google Calendar event with customer details
+    3. Creates database appointment record with calendar_event_id
+    4. Sends calendar invitation to customer email if available
 
     Args:
         db: Database session
@@ -400,6 +406,8 @@ async def book_appointment(
                 "success": True,
                 "data": {
                     "appointment_id": int,
+                    "calendar_event_id": str,
+                    "calendar_link": str,
                     "customer_id": int,
                     "customer_name": str,
                     "vehicle_id": int,
@@ -411,9 +419,6 @@ async def book_appointment(
                 },
                 "message": str
             }
-
-    Note:
-        Feature 7 will create a Google Calendar event for this appointment.
     """
     try:
         # Validate customer exists
@@ -470,7 +475,64 @@ async def book_appointment(
                 "message": "Invalid service type",
             }
 
-        # Create appointment
+        # Initialize calendar service and create calendar event
+        from zoneinfo import ZoneInfo
+
+        from app.config import settings
+        from app.services.calendar_service import CalendarService
+
+        calendar = CalendarService(
+            client_id=settings.GOOGLE_CLIENT_ID,
+            client_secret=settings.GOOGLE_CLIENT_SECRET,
+            refresh_token=settings.GOOGLE_REFRESH_TOKEN,
+            timezone_name=settings.CALENDAR_TIMEZONE,
+        )
+
+        # Prepare calendar event details
+        customer_name = f"{customer.first_name} {customer.last_name}"
+        vehicle_info = f"{vehicle.year} {vehicle.make} {vehicle.model}"
+
+        # Convert datetime to timezone-aware for calendar
+        tz = ZoneInfo(settings.CALENDAR_TIMEZONE)
+        start_time = scheduled_datetime.replace(tzinfo=tz)
+        end_time = start_time + timedelta(minutes=duration_minutes)
+
+        # Build calendar event description with all details
+        event_description = (
+            f"Customer: {customer_name}\n"
+            f"Phone: {customer.phone_number}\n"
+            f"Email: {customer.email or 'N/A'}\n"
+            f"Vehicle: {vehicle_info}\n"
+            f"VIN: {vehicle.vin}\n"
+            f"Service Type: {service_type}\n"
+        )
+
+        # Add optional fields to description
+        if service_description:
+            event_description += f"\nService Description: {service_description}"
+        if customer_concerns:
+            event_description += f"\nCustomer Concerns: {customer_concerns}"
+        if notes:
+            event_description += f"\nNotes: {notes}"
+
+        # Create calendar event
+        calendar_result = await calendar.create_calendar_event(
+            title=f"{service_type} - {customer_name}",
+            start_time=start_time,
+            end_time=end_time,
+            description=event_description,
+            attendees=[customer.email] if customer.email else None,
+        )
+
+        if not calendar_result["success"]:
+            logger.error(f"Failed to create calendar event: {calendar_result['message']}")
+            return {
+                "success": False,
+                "error": f"Failed to create calendar event: {calendar_result['message']}",
+                "message": "Failed to create calendar event",
+            }
+
+        # Create appointment in database with calendar event ID
         appointment = Appointment(
             customer_id=customer_id,
             vehicle_id=vehicle_id,
@@ -484,6 +546,7 @@ async def book_appointment(
             confirmation_sent=True,
             booking_method="ai_voice",
             booked_by="AI Voice Agent",
+            calendar_event_id=calendar_result["event_id"],
         )
 
         db.add(appointment)
@@ -492,30 +555,29 @@ async def book_appointment(
 
         logger.info(
             f"Appointment {appointment.id} created for customer {customer_id}, "
-            f"vehicle {vehicle_id} at {scheduled_at}"
+            f"vehicle {vehicle_id} at {scheduled_at} with calendar event {calendar_result['event_id']}"
         )
 
         # Invalidate customer cache (data changed)
         await invalidate_customer_cache(customer.phone_number)
 
         # Build response
-        customer_name = f"{customer.first_name} {customer.last_name}"
-        vehicle_description = f"{vehicle.year} {vehicle.make} {vehicle.model}"
-
         return {
             "success": True,
             "data": {
                 "appointment_id": appointment.id,
+                "calendar_event_id": calendar_result["event_id"],
+                "calendar_link": calendar_result["calendar_link"],
                 "customer_id": customer_id,
                 "customer_name": customer_name,
                 "vehicle_id": vehicle_id,
-                "vehicle_description": vehicle_description,
+                "vehicle_description": vehicle_info,
                 "scheduled_at": scheduled_datetime.isoformat(),
                 "service_type": service_type,
                 "duration_minutes": duration_minutes,
                 "status": appointment.status.value,
             },
-            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}",
+            "message": f"Appointment booked successfully for {customer_name} on {scheduled_datetime.strftime('%B %d, %Y at %I:%M %p')}. Calendar event created: {calendar_result['calendar_link']}",
         }
 
     except Exception as e:
