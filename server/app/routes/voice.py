@@ -87,6 +87,12 @@ When you don't know something:
 - For exact pricing: "Typical range is $X-Y, but final price depends on your specific vehicle"
 - For policy exceptions: "Let me connect you with a manager who can help with that"
 
+Customer lookup guidelines:
+- If you can't find a customer by name, clearly state: "I don't see [name] in our system. Could you provide your phone number so I can look you up?"
+- If a customer has no vehicles on file, state: "I see your account, but I don't have any vehicles listed. What vehicle would you like to bring in?"
+- NEVER loop with repeated apologies - if a lookup fails twice, ask for different information
+- Move the conversation forward - don't get stuck retrying the same failed approach
+
 Remember: You're helpful, knowledgeable, and focused on getting customers scheduled efficiently.
 Stay strictly within automotive service topics and speak naturally for phone conversations."""
 
@@ -672,7 +678,7 @@ async def handle_media_stream(websocket: WebSocket):
                                         if chunks_sent == 1:
                                             metrics.track_tts_first_byte()
 
-                                        # Send audio to Twilio (base64 encode mulaw) with mark tracking
+                                        # Send audio to Twilio (base64 encode mulaw)
                                         await websocket.send_text(
                                             json.dumps({
                                                 "event": "media",
@@ -683,18 +689,21 @@ async def handle_media_stream(websocket: WebSocket):
                                             })
                                         )
 
-                                        # Send mark event immediately after media (call-gpt pattern)
-                                        mark_label = str(uuid.uuid4())
-                                        await websocket.send_text(
-                                            json.dumps({
-                                                "event": "mark",
-                                                "streamSid": stream_sid,
-                                                "mark": {"name": mark_label},
-                                            })
-                                        )
-                                        marks.append(mark_label)
-
-                                        logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} to Twilio with mark {mark_label}")
+                                        # Send mark only every 10 chunks to reduce overhead (prevents choppy audio)
+                                        # Still provides accurate barge-in detection while keeping marks array small
+                                        if chunks_sent % 10 == 1:  # Chunks 1, 11, 21, 31...
+                                            mark_label = str(uuid.uuid4())
+                                            await websocket.send_text(
+                                                json.dumps({
+                                                    "event": "mark",
+                                                    "streamSid": stream_sid,
+                                                    "mark": {"name": mark_label},
+                                                })
+                                            )
+                                            marks.append(mark_label)
+                                            logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} with mark {mark_label}")
+                                        else:
+                                            logger.debug(f"[VOICE] Sent audio chunk {chunks_sent} (no mark)")
 
                                     except asyncio.TimeoutError:
                                         # No audio for 500ms, check if we're still speaking
