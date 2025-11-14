@@ -245,17 +245,34 @@ while true; do
             echo ""
             venv-new/bin/python scripts/test_voice_calls.py inbound
             echo ""
+            echo -e "${BLUE}Sample Customers You Can Pose As:${NC}"
+            echo "  • John Smith - 2001 Honda Odyssey (upcoming oil change)"
+            echo "  • Maria Garcia - 2018 Toyota Camry (upcoming brake service)"
+            echo "  • Robert Johnson - 2016 Honda CR-V & 2011 Ford F-150"
+            echo "  • Lisa Chen - 2020 VW Jetta (upcoming inspection)"
+            echo ""
             read -p "Press Enter to continue..."
             ;;
         2)
             echo ""
             venv-new/bin/python scripts/test_voice_calls.py outbound
             echo ""
+            echo -e "${BLUE}What to Test:${NC}"
+            echo "  • Answer the call - Sophie will mention specific appointment details"
+            echo "  • Try interrupting with 'wait' or 'hold on' (barge-in test)"
+            echo "  • Ask off-topic questions like 'tell me about cybersecurity'"
+            echo "  • Say 'goodbye' to test auto hang-up"
+            echo ""
             read -p "Press Enter to continue..."
             ;;
         3)
             echo ""
             venv-new/bin/python scripts/test_voice_calls.py outbound-reminder
+            echo ""
+            echo -e "${BLUE}What to Test:${NC}"
+            echo "  • Answer the call - Sophie will provide appointment reminder"
+            echo "  • Try interrupting Sophie while she's speaking"
+            echo "  • Test natural conversation flow"
             echo ""
             read -p "Press Enter to continue..."
             ;;

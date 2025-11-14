@@ -34,6 +34,10 @@ async def seed_data():
     """Seed the database with test data."""
     print("🌱 Seeding test data...")
 
+    # Initialize database
+    from app.services.database import init_db
+    await init_db()
+
     # Get database session
     db_gen = get_db()
     db = await db_gen.__anext__()
