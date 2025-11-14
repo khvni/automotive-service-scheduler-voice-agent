@@ -45,3 +45,49 @@ async def redis_health_check():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"status": "unhealthy", "redis": "disconnected", "error": str(e)},
         )
+
+
+@router.get("/health/calendar")
+async def calendar_health_check():
+    """
+    Calendar service health check.
+
+    Returns calendar operation metrics and health status.
+    Useful for monitoring calendar integration reliability.
+    """
+    from app.utils.calendar_metrics import get_metrics_tracker
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    try:
+        tracker = get_metrics_tracker()
+        health = tracker.check_health()
+
+        # Return 503 if unhealthy, 200 otherwise
+        if health["status"] == "unhealthy":
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={
+                    "status": health["status"],
+                    "service": "calendar",
+                    "alerts": health["alerts"],
+                    "stats": health["stats"],
+                },
+            )
+
+        return {
+            "status": health["status"],
+            "service": "calendar",
+            "alerts": health["alerts"],
+            "stats": health["stats"],
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "status": "unknown",
+                "service": "calendar",
+                "error": str(e),
+            },
+        )
