@@ -251,6 +251,10 @@ async def get_first_appointment() -> int:
     Returns:
         Appointment ID or None if no appointments found
     """
+    # Initialize database
+    from app.services.database import init_db
+    await init_db()
+
     db_gen = get_db()
     db = await db_gen.__anext__()
 
