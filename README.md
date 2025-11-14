@@ -12,10 +12,16 @@ Production-ready voice AI system that handles inbound appointment booking calls 
 
 **Core Capabilities:**
 - Real-time voice conversations with barge-in support
-- Intelligent appointment scheduling with calendar integration
+- Intelligent appointment scheduling with Google Calendar integration
 - Customer verification and vehicle tracking
 - Automated 24-hour reminder calls
 - Multi-flow conversation handling (booking, rescheduling, inquiries)
+
+**Recent Enhancements (commits 36fbcae..57c3f01):**
+- **Full Google Calendar Integration**: Real-time availability checks, automatic event creation/updates/cancellation
+- **Enhanced Reliability**: Retry logic with exponential backoff, comprehensive error handling, and mock calendar fallback
+- **OAuth Automation**: Automated refresh token generation script for seamless calendar authentication
+- **Health Monitoring**: Calendar service health checks with detailed metrics and performance tracking
 
 ## Architecture
 
@@ -174,7 +180,7 @@ OPENAI_API_KEY=sk-proj-...
 # Google Calendar
 GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret
-GOOGLE_REFRESH_TOKEN=your_refresh_token
+GOOGLE_REFRESH_TOKEN=your_refresh_token  # Use scripts/generate_google_refresh_token.py to generate
 
 # Worker
 WORKER_REMINDER_HOUR=18
@@ -353,6 +359,7 @@ automotive-voice/
 │   ├── load_customer_data.py
 │   ├── update_twilio_webhook.py
 │   ├── test_voice_calls.py
+│   ├── generate_google_refresh_token.py  # Google OAuth token generator
 │   ├── format_code.sh          # Code formatting (black, isort)
 │   ├── check_code_quality.sh   # Linting (flake8, mypy, bandit)
 │   └── run_demo*.sh            # Demo runners
