@@ -376,6 +376,7 @@ During testing, set `YOUR_TEST_NUMBER` in `.env` to restrict outbound calls to a
 - [Deployment Guide](docs/deployment.md)
 - [Production Checklist](docs/production-checklist.md)
 - [Product Requirements](docs/prd.md)
+- [Contributing Guide](docs/CONTRIBUTING.md)
 
 ## Contributing
 
@@ -387,7 +388,7 @@ This is a private project for Otto's Auto. If contributing:
 4. Run pre-commit hooks
 5. Ensure all tests pass
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
 
 ## License
 
