@@ -74,7 +74,7 @@ SERVICE_BAYS = ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2"]
 def generate_vin():
     """Generate a realistic VIN number."""
     # Simple VIN generation (17 characters)
-    chars = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
+    chars = "ABCDEFGHJKLMNPRSTUVWXYZ0123456789"  # pragma: allowlist secret
     return "".join(random.choice(chars) for _ in range(17))
 
 

@@ -18,7 +18,7 @@ class WorkerSettings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/automotive_scheduler"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/automotive_scheduler"  # pragma: allowlist secret  # noqa: E501
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

@@ -60,7 +60,7 @@ All configuration is in `.env` file:
 
 ```bash
 # Database
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db  # pragma: allowlist secret
 
 # Twilio
 TWILIO_ACCOUNT_SID=ACxxxx

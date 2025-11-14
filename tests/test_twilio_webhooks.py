@@ -29,7 +29,7 @@ from xml.etree import ElementTree as ET
 BASE_URL = "http://localhost:8000"
 TEST_PHONE = "+15551234567"
 TEST_TWILIO_NUMBER = "+15559876543"
-TEST_CALL_SID = "CA1234567890abcdef1234567890abcdef"
+TEST_CALL_SID = "CA1234567890abcdef1234567890abcdef"  # pragma: allowlist secret
 
 
 def parse_twiml(xml_content: str) -> dict:

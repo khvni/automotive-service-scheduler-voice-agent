@@ -93,7 +93,7 @@ cp .env.example .env
 **Critical .env settings for local testing:**
 ```bash
 # Your actual credentials
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/automotive_voice
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/automotive_voice  # pragma: allowlist secret
 REDIS_URL=redis://localhost:6379/0
 
 TWILIO_ACCOUNT_SID=ACxxxxx...

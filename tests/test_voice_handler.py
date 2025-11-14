@@ -51,8 +51,8 @@ async def test_websocket_connection():
             "sequenceNumber": "1",
             "start": {
                 "streamSid": "MZ1234567890abcdef",
-                "accountSid": "AC1234567890abcdef",
-                "callSid": "CA1234567890abcdef",
+                "accountSid": "AC1234567890abcdef",  # pragma: allowlist secret
+                "callSid": "CA1234567890abcdef",  # pragma: allowlist secret
                 "from": "+15551234567",
                 "customParameters": {"From": "+15551234567"},
             },

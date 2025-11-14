@@ -81,13 +81,13 @@ Render is the recommended platform for this application because:
    CORS_ORIGINS=["https://automotive-voice-server.onrender.com"]
 
    # Database (paste Internal Database URL from step 2)
-   DATABASE_URL=postgresql://automotive_voice_user:xxx@xxx.oregon-postgres.render.com/automotive_voice
+   DATABASE_URL=postgresql://automotive_voice_user:xxx@xxx.oregon-postgres.render.com/automotive_voice  # pragma: allowlist secret
 
    # Redis (paste Internal Redis URL from step 3)
    REDIS_URL=redis://red-xxx:6379
 
    # Twilio
-   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # pragma: allowlist secret
    TWILIO_AUTH_TOKEN=your_auth_token
    TWILIO_PHONE_NUMBER=+15551234567
 
@@ -199,7 +199,7 @@ BASE_URL=https://automotive-voice-server.onrender.com
 Use the **Internal Database URL** (not External) for faster connections:
 ```bash
 # Internal (faster)
-DATABASE_URL=postgresql://user:pass@dpg-xxx-a.oregon-postgres.render.com/dbname
+DATABASE_URL=postgresql://user:pass@dpg-xxx-a.oregon-postgres.render.com/dbname  # pragma: allowlist secret
 
 # Not External
 ```

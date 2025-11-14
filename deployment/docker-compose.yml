@@ -7,7 +7,7 @@ services:
     container_name: automotive-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: postgres  # pragma: allowlist secret
       POSTGRES_DB: automotive_scheduler
     ports:
       - "5432:5432"
@@ -84,7 +84,7 @@ services:
     container_name: twenty-db
     environment:
       POSTGRES_USER: twenty
-      POSTGRES_PASSWORD: twenty
+      POSTGRES_PASSWORD: twenty  # pragma: allowlist secret
       POSTGRES_DB: twenty
     ports:
       - "5433:5432"

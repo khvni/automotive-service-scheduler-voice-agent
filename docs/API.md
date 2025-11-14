@@ -126,7 +126,7 @@ TwiML XML with `<Connect><Stream>` element
         <Stream url="wss://yourdomain.com/api/v1/voice/media-stream">
             <Parameter name="From" value="+15551234567"/>
             <Parameter name="To" value="+15559876543"/>
-            <Parameter name="CallSid" value="CA1234567890abcdef"/>
+            <Parameter name="CallSid" value="CA1234567890abcdef"/>  <!-- pragma: allowlist secret -->
         </Stream>
     </Connect>
 </Response>
@@ -303,8 +303,8 @@ Sent by Twilio when media streaming begins.
   "sequenceNumber": "1",
   "start": {
     "streamSid": "MZ1234567890abcdef",
-    "accountSid": "AC1234567890abcdef",
-    "callSid": "CA1234567890abcdef",
+    "accountSid": "AC1234567890abcdef",  # pragma: allowlist secret
+    "callSid": "CA1234567890abcdef",  # pragma: allowlist secret
     "tracks": ["inbound"],
     "customParameters": {
       "From": "+15551234567",

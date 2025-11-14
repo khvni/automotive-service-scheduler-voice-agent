@@ -75,15 +75,15 @@ BASE_URL=https://yourdomain.com
 DEBUG=false
 
 # === Database ===
-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/automotive_voice
+DATABASE_URL=postgresql+asyncpg://user:password@host:5432/automotive_voice  # pragma: allowlist secret
 # For Neon: postgresql+asyncpg://user:password@host.neon.tech/automotive_voice?sslmode=require
 
 # === Redis ===
-REDIS_URL=redis://default:password@host:6379
+REDIS_URL=redis://default:password@host:6379  # pragma: allowlist secret
 # For Upstash: rediss://default:password@host.upstash.io:6379
 
 # === Twilio ===
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # pragma: allowlist secret
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+15555551234
 
@@ -158,7 +158,7 @@ echo ".env" >> .gitignore
    ```bash
    sudo -u postgres psql
    CREATE DATABASE automotive_voice;
-   CREATE USER automotive_user WITH PASSWORD 'secure_password';
+   CREATE USER automotive_user WITH PASSWORD 'secure_password';  # pragma: allowlist secret
    GRANT ALL PRIVILEGES ON DATABASE automotive_voice TO automotive_user;
    \q
    ```
@@ -166,7 +166,7 @@ echo ".env" >> .gitignore
 3. **Configure Connection:**
    ```bash
    # In .env
-   DATABASE_URL=postgresql+asyncpg://automotive_user:secure_password@localhost:5432/automotive_voice
+   DATABASE_URL=postgresql+asyncpg://automotive_user:secure_password@localhost:5432/automotive_voice  # pragma: allowlist secret
    ```
 
 4. **Run Migrations:**
@@ -696,7 +696,7 @@ read_engine = create_async_engine(READ_DATABASE_URL)
 **Connection Pooling:**
 ```python
 # PgBouncer for connection pooling
-DATABASE_URL = "postgresql+asyncpg://user:pass@pgbouncer:6432/db"
+DATABASE_URL = "postgresql+asyncpg://user:pass@pgbouncer:6432/db"  # pragma: allowlist secret
 ```
 
 ### Auto-Scaling (Cloud Platforms)

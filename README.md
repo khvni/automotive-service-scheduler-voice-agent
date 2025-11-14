@@ -155,13 +155,13 @@ ENV=production
 BASE_URL=https://yourdomain.com
 
 # Database
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/automotive_voice
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/automotive_voice  # pragma: allowlist secret
 
 # Redis
-REDIS_URL=redis://default:password@host:6379
+REDIS_URL=redis://default:password@host:6379  # pragma: allowlist secret
 
 # Twilio
-TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx  # pragma: allowlist secret
 TWILIO_AUTH_TOKEN=your_auth_token
 TWILIO_PHONE_NUMBER=+15555551234
 
