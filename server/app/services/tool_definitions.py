@@ -38,16 +38,10 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "string",
                         "description": "Date to check availability (format: YYYY-MM-DD, e.g., 2025-01-15)",
                     },
-                    "service_type": {
-                        "type": "string",
-                        "description": "Type of service needed (optional, affects duration). Options: oil_change, brake_service, tire_rotation, inspection, general_service",
-                        "enum": [
-                            "oil_change",
-                            "brake_service",
-                            "tire_rotation",
-                            "inspection",
-                            "general_service",
-                        ],
+                    "duration_minutes": {
+                        "type": "integer",
+                        "description": "Appointment duration in minutes. Common values: 30 (quick service), 60 (standard service), 90 (complex work). Default: 30",
+                        "default": 30,
                     },
                 },
                 "required": ["date"],
@@ -70,20 +64,25 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "integer",
                         "description": "Vehicle ID (obtained from lookup_customer result)",
                     },
+                    "scheduled_at": {
+                        "type": "string",
+                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00')",
+                    },
                     "service_type": {
                         "type": "string",
                         "description": "Type of service to book (e.g., 'oil_change', 'brake_service', 'inspection')",
                     },
-                    "start_time": {
-                        "type": "string",
-                        "description": "Appointment start time in ISO format (e.g., '2025-01-15T09:00:00')",
+                    "duration_minutes": {
+                        "type": "integer",
+                        "description": "Duration in minutes (default: 60)",
+                        "default": 60,
                     },
                     "notes": {
                         "type": "string",
                         "description": "Any special notes or customer concerns (optional)",
                     },
                 },
-                "required": ["customer_id", "vehicle_id", "service_type", "start_time"],
+                "required": ["customer_id", "vehicle_id", "scheduled_at", "service_type"],
             },
         },
     },
@@ -144,12 +143,12 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
                         "type": "integer",
                         "description": "Appointment ID to reschedule (obtained from get_upcoming_appointments)",
                     },
-                    "new_start_time": {
+                    "new_datetime": {
                         "type": "string",
-                        "description": "New appointment start time in ISO format (e.g., '2025-01-16T14:00:00')",
+                        "description": "New appointment datetime in ISO format (e.g., '2025-01-16T14:00:00')",
                     },
                 },
-                "required": ["appointment_id", "new_start_time"],
+                "required": ["appointment_id", "new_datetime"],
             },
         },
     },
