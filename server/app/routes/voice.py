@@ -22,7 +22,7 @@ from app.services.tool_definitions import TOOL_SCHEMAS
 from app.services.tool_router import ToolRouter
 from app.utils.audio_buffer import AudioBuffer
 from app.utils.performance_metrics import PerformanceMetrics
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,22 +96,47 @@ def create_tool_handler(router: ToolRouter, tool_name: str):
 
 
 @router.post("/incoming")
-async def handle_incoming_call():
+async def handle_incoming_call(request: Request):
     """
-    Twilio webhook for incoming calls.
+    Twilio webhook for incoming calls (both inbound and outbound).
     Returns TwiML to establish WebSocket connection.
     """
+    # Get form data from Twilio webhook
+    form_data = await request.form()
+    call_direction = form_data.get("Direction", "inbound")  # "inbound" or "outbound-api"
+    caller_number = form_data.get("From", "")
+
     # Strip protocol from BASE_URL to construct proper WebSocket URL
     ws_url = f"wss://{settings.BASE_URL.replace('https://', '').replace('http://', '')}/api/v1/voice/media-stream"
 
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    # Determine if this is an outbound call
+    is_outbound = "outbound" in call_direction.lower()
+
+    # Only say "please wait" for inbound calls (outbound will get immediate greeting from agent)
+    if is_outbound:
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="{ws_url}">
+            <Parameter name="is_outbound" value="true"/>
+            <Parameter name="direction" value="{call_direction}"/>
+            <Parameter name="From" value="{caller_number}"/>
+        </Stream>
+    </Connect>
+</Response>"""
+    else:
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Say voice="Google.en-US-Chirp3-HD-Aoede">
         Please wait while we connect you to our AI assistant.
     </Say>
     <Pause length="1"/>
     <Connect>
-        <Stream url="{ws_url}" />
+        <Stream url="{ws_url}">
+            <Parameter name="is_outbound" value="false"/>
+            <Parameter name="direction" value="{call_direction}"/>
+            <Parameter name="From" value="{caller_number}"/>
+        </Stream>
     </Connect>
 </Response>"""
 
@@ -319,6 +344,36 @@ async def handle_media_stream(websocket: WebSocket):
                                     )
                             except Exception as e:
                                 logger.warning(f"Could not personalize prompt: {e}")
+
+                        # Send initial greeting for outbound calls
+                        # Check if this is an outbound call (API-initiated vs user-initiated)
+                        call_direction = custom_params.get("direction", "inbound")
+
+                        if call_direction == "outbound" or custom_params.get("is_outbound") == "true":
+                            logger.info("Outbound call detected - sending initial greeting")
+
+                            try:
+                                # Generate initial greeting
+                                initial_message = "Hi, this is Sophie from Otto's Auto. Is this a good time to talk?"
+
+                                # Send through TTS
+                                async for audio_chunk in tts.text_to_speech(initial_message):
+                                    if audio_chunk:
+                                        # Encode to base64 for Twilio
+                                        audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
+
+                                        # Send to Twilio
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "media",
+                                                "streamSid": stream_sid,
+                                                "media": {"payload": audio_b64},
+                                            })
+                                        )
+
+                                logger.info("Initial greeting sent successfully")
+                            except Exception as e:
+                                logger.error(f"Failed to send initial greeting: {e}", exc_info=True)
 
                     elif event == "media":
                         # Decode audio and send to STT

@@ -119,6 +119,9 @@ class VoiceAgentTester:
                 status_callback=f"{self.base_url}/api/v1/webhooks/status",
                 status_callback_event=["initiated", "ringing", "answered", "completed"],
                 record=False,  # Set to True if you want to record for debugging
+                # Pass direction parameter to voice handler
+                machine_detection="Enable",  # Optional: detect voicemail
+                timeout=60,  # Ring for 60 seconds before giving up
             )
 
             print(f"✓ Call initiated successfully!")
