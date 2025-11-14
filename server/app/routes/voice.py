@@ -850,8 +850,14 @@ async def handle_media_stream(websocket: WebSocket):
                                     should_send = True
 
                                 if should_send:
+                                    # Add a space at the end to prevent word mashing between chunks
+                                    # This ensures TTS properly separates words like "call us" instead of "callus"
+                                    text_to_send = stripped_buffer
+                                    if not text_to_send.endswith((' ', '.', '!', '?', ':', ';', ',')):
+                                        text_to_send += ' '
+
                                     logger.info(f"[VOICE] Sending to TTS ({word_count} words): '{stripped_buffer[:100]}...'")
-                                    await tts.send_text(stripped_buffer)
+                                    await tts.send_text(text_to_send)
                                     sentence_buffer = ""
 
                             elif event["type"] == "tool_call":
@@ -871,9 +877,9 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 feedback_message = tool_feedback_map.get(tool_name, "Just a moment...")
 
-                                # Send feedback immediately to TTS
+                                # Send feedback immediately to TTS (add space to prevent word mashing)
                                 logger.info(f"[VOICE] Sending tool feedback: '{feedback_message}'")
-                                await tts.send_text(feedback_message)
+                                await tts.send_text(feedback_message + " ")
 
                                 # Track that we provided feedback (add to response_text for context)
                                 response_text += feedback_message + " "
@@ -894,8 +900,12 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 # Send any remaining text to TTS
                                 if sentence_buffer.strip():
-                                    logger.info(f"[VOICE] Sending final text to TTS: '{sentence_buffer}'")
-                                    await tts.send_text(sentence_buffer)
+                                    # Ensure final buffer has proper ending (space or punctuation)
+                                    final_text = sentence_buffer.strip()
+                                    if not final_text.endswith((' ', '.', '!', '?', ':', ';', ',')):
+                                        final_text += ' '
+                                    logger.info(f"[VOICE] Sending final text to TTS: '{final_text}'")
+                                    await tts.send_text(final_text)
 
                                 # Flush TTS to finalize audio generation
                                 await tts.flush()
