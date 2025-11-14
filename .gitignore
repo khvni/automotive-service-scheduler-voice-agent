@@ -95,9 +95,10 @@ docs/development-log/
 docs/archive/
 docs/code-reviews/
 
-# Presentation slides (keep for job application)
-!PRESENTATION_SLIDES_CONTENT.md
-!ARCHITECTURE_DIAGRAM.md
-
 # PDF presentations
 *.pdf
+
+# Presentation files
+presentation.md
+PRESENTATION_SLIDES_CONTENT.md
+ARCHITECTURE_DIAGRAM.md
