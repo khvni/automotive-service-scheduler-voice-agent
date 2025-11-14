@@ -457,9 +457,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 if customer:
                                     # Enhance prompt with customer context
-                                    personalized_prompt = (
-                                        SYSTEM_PROMPT + "\n\nCUSTOMER CONTEXT:\n"
-                                    )
+                                    personalized_prompt = SYSTEM_PROMPT + "\n\nCUSTOMER CONTEXT:\n"
                                     personalized_prompt += (
                                         f"- Name: {customer['first_name']} "
                                         f"{customer['last_name']}\n"
@@ -471,8 +469,7 @@ async def handle_media_stream(websocket: WebSocket):
 
                                     if customer.get("last_service_date"):
                                         personalized_prompt += (
-                                            f"- Last service: "
-                                            f"{customer['last_service_date']}\n"
+                                            f"- Last service: " f"{customer['last_service_date']}\n"
                                         )
 
                                     if customer.get("vehicles"):
@@ -485,8 +482,7 @@ async def handle_media_stream(websocket: WebSocket):
                                         )
 
                                     personalized_prompt += (
-                                        "\nGreet them by name and provide "
-                                        "personalized service!"
+                                        "\nGreet them by name and provide " "personalized service!"
                                     )
                                     openai.set_system_prompt(personalized_prompt)
                                     logger.info(
@@ -550,9 +546,7 @@ async def handle_media_stream(websocket: WebSocket):
                             or custom_params.get("is_outbound") == "true"
                         ):
                             # OUTBOUND CALL - Appointment-specific greeting
-                            logger.info(
-                                "Outbound call detected - sending initial greeting"
-                            )
+                            logger.info("Outbound call detected - sending initial greeting")
 
                             try:
                                 # Check if appointment_id was provided for
