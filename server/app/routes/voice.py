@@ -382,6 +382,15 @@ async def handle_media_stream(websocket: WebSocket):
 
                                 if appointment_id:
                                     try:
+                                        # Validate appointment_id is a valid integer
+                                        try:
+                                            appt_id = int(appointment_id)
+                                            if appt_id <= 0:
+                                                raise ValueError("Appointment ID must be positive")
+                                        except (ValueError, TypeError) as e:
+                                            logger.warning(f"Invalid appointment_id '{appointment_id}': {e}, using generic greeting")
+                                            raise  # Re-raise to skip to generic greeting
+
                                         # Fetch appointment details for contextualized greeting
                                         from app.tools.crm_tools import get_appointment_details
                                         from sqlalchemy import select
@@ -394,7 +403,7 @@ async def handle_media_stream(websocket: WebSocket):
                                             select(Appointment, Vehicle, Customer)
                                             .join(Vehicle, Appointment.vehicle_id == Vehicle.id)
                                             .join(Customer, Appointment.customer_id == Customer.id)
-                                            .where(Appointment.id == int(appointment_id))
+                                            .where(Appointment.id == appt_id)
                                         )
                                         row = result.first()
 
@@ -412,9 +421,9 @@ async def handle_media_stream(websocket: WebSocket):
                                                 f"appointment for your {vehicle.year} {vehicle.make} {vehicle.model} "
                                                 f"scheduled for {appt_date} at {appt_time}. Is this a good time to talk?"
                                             )
-                                            logger.info(f"Generated contextualized greeting for appointment {appointment_id}")
+                                            logger.info(f"Generated contextualized greeting for appointment {appt_id}")
                                         else:
-                                            logger.warning(f"Appointment {appointment_id} not found, using generic greeting")
+                                            logger.warning(f"Appointment {appt_id} not found, using generic greeting")
                                     except Exception as e:
                                         logger.warning(f"Could not fetch appointment details: {e}, using generic greeting")
 
@@ -659,13 +668,29 @@ async def handle_media_stream(websocket: WebSocket):
                         await audio_task
 
                         # Detect conversation end (goodbye detection)
+                        # Check if goodbye phrase appears near end of response to avoid false positives
+                        response_lower = response_text.lower()
                         goodbye_phrases = [
-                            "goodbye", "bye", "thank you bye", "thanks bye",
-                            "have a good day", "talk to you later", "see you",
+                            "goodbye", "bye bye", "thank you, goodbye", "thanks, goodbye",
+                            "have a good day", "talk to you later", "see you later",
                             "have a great day", "take care"
                         ]
-                        if any(phrase in response_text.lower() for phrase in goodbye_phrases):
-                            logger.info(f"[VOICE] Goodbye detected in response - ending call in 2 seconds")
+
+                        # Only trigger if goodbye is in the last 30% of the response
+                        # This prevents false positives from phrases like "bye-laws" or mid-conversation "goodbye"
+                        trigger_hangup = False
+                        for phrase in goodbye_phrases:
+                            phrase_pos = response_lower.rfind(phrase)
+                            if phrase_pos >= 0:
+                                # Check if phrase is in last 30% of response
+                                relative_pos = phrase_pos / len(response_lower)
+                                if relative_pos >= 0.7:
+                                    trigger_hangup = True
+                                    logger.info(f"[VOICE] Goodbye phrase '{phrase}' detected at position {relative_pos:.1%}")
+                                    break
+
+                        if trigger_hangup:
+                            logger.info(f"[VOICE] Ending call in 2 seconds")
                             await asyncio.sleep(2)  # Let final message finish playing
 
                             # Send hangup event to Twilio

@@ -15,6 +15,7 @@ Example:
 
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "server"))
@@ -78,6 +79,42 @@ def update_webhook(ngrok_url: str) -> None:
         sys.exit(1)
 
 
+def validate_ngrok_url(url: str) -> bool:
+    """
+    Validate that the URL is a properly formatted ngrok URL.
+
+    Args:
+        url: URL to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    try:
+        parsed = urlparse(url)
+
+        # Check scheme
+        if parsed.scheme not in ("http", "https"):
+            print(f"❌ Error: URL must use http or https scheme")
+            return False
+
+        # Check domain is ngrok
+        if not parsed.netloc or "ngrok" not in parsed.netloc.lower():
+            print(f"❌ Error: URL must be an ngrok domain")
+            print(f"   Expected format: https://xxxx.ngrok.io or https://xxxx.ngrok-free.app")
+            return False
+
+        # Check no credentials in URL
+        if parsed.username or parsed.password:
+            print(f"❌ Error: URL should not contain credentials")
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Error: Invalid URL format: {e}")
+        return False
+
+
 def main():
     """Main entry point."""
     if len(sys.argv) < 2:
@@ -87,10 +124,8 @@ def main():
 
     ngrok_url = sys.argv[1].rstrip("/")  # Remove trailing slash if present
 
-    # Validate URL format
-    if not ngrok_url.startswith("http"):
-        print(f"❌ Error: Invalid URL format: {ngrok_url}")
-        print(f"   URL must start with http:// or https://")
+    # Validate URL format and domain
+    if not validate_ngrok_url(ngrok_url):
         sys.exit(1)
 
     update_webhook(ngrok_url)
