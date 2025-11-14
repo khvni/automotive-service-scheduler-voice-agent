@@ -14,6 +14,7 @@ from typing import Optional
 import websockets
 from websockets.exceptions import WebSocketException
 
+from app.utils.retry import with_retry
 from .tts_interface import TTSInterface
 
 logger = logging.getLogger(__name__)
@@ -80,28 +81,12 @@ class DeepgramTTSService(TTSInterface):
         Raises:
             Exception: If connection fails after all retries
         """
-        last_error = None
-
-        for attempt in range(max_retries):
-            try:
-                await self._attempt_connection()
-                logger.info(f"Connected to Deepgram TTS on attempt {attempt + 1}/{max_retries}")
-                return
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"TTS connection attempt {attempt + 1}/{max_retries} failed: {e}"
-                )
-
-                if attempt < max_retries - 1:
-                    delay = backoff_factor ** attempt
-                    logger.info(f"Retrying TTS connection in {delay:.1f}s...")
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(f"TTS connection failed after {max_retries} attempts")
-
-        # All retries exhausted
-        raise Exception(f"Failed to connect to Deepgram TTS after {max_retries} attempts: {last_error}")
+        await with_retry(
+            self._attempt_connection,
+            max_retries=max_retries,
+            backoff_factor=backoff_factor,
+            operation_name="Deepgram TTS Connection"
+        )
 
     async def _attempt_connection(self) -> None:
         """
