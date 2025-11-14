@@ -57,7 +57,7 @@ class DeepgramSTTService:
             no_delay=True,  # CRITICAL: minimize latency for real-time responsiveness
             # End-of-speech detection (tuned for natural conversation flow)
             endpointing=200,  # ms of silence to detect end of utterance (reduced for faster interruption)
-            utterance_end_ms=1200,  # ms to finalize utterance (increased to prevent cutting off user)
+            utterance_end_ms=1000,  # ms to finalize utterance (balanced to prevent cuts while maintaining responsiveness)
         )
 
         logger.info("DeepgramSTTService initialized with nova-2-phonecall model")

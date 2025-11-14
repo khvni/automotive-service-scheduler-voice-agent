@@ -25,6 +25,7 @@ from app.utils.performance_metrics import PerformanceMetrics
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from twilio.rest import Client as TwilioClient
 
 logger = logging.getLogger(__name__)
 
@@ -367,11 +368,12 @@ async def handle_media_stream(websocket: WebSocket):
                             except Exception as e:
                                 logger.warning(f"Could not personalize prompt: {e}")
 
-                        # Send initial greeting for outbound calls
-                        # Check if this is an outbound call (API-initiated vs user-initiated)
+                        # Send initial greeting for ALL calls (both inbound and outbound)
+                        # Proactive greeting improves UX and reduces awkward silence
                         call_direction = custom_params.get("direction", "inbound")
 
                         if call_direction == "outbound" or custom_params.get("is_outbound") == "true":
+                            # OUTBOUND CALL - Appointment-specific greeting
                             logger.info("Outbound call detected - sending initial greeting")
 
                             try:
@@ -426,6 +428,9 @@ async def handle_media_stream(websocket: WebSocket):
                                     except Exception as e:
                                         logger.warning(f"Could not fetch appointment details: {e}, using generic greeting")
 
+                                # Add initial greeting to conversation history so context is maintained
+                                openai.add_assistant_message(initial_message)
+
                                 # Send through TTS
                                 async for audio_chunk in tts.text_to_speech(initial_message):
                                     if audio_chunk:
@@ -444,6 +449,46 @@ async def handle_media_stream(websocket: WebSocket):
                                 logger.info("Initial greeting sent successfully")
                             except Exception as e:
                                 logger.error(f"Failed to send initial greeting: {e}", exc_info=True)
+                        else:
+                            # INBOUND CALL - Generic friendly greeting
+                            logger.info("Inbound call detected - sending proactive greeting")
+
+                            try:
+                                # Personalize if we have customer info, otherwise generic
+                                if caller_phone:
+                                    try:
+                                        from app.tools.crm_tools import lookup_customer
+                                        customer = await lookup_customer(db, caller_phone)
+                                        if customer:
+                                            initial_message = f"Hello {customer['first_name']}! This is Sophie from Otto's Auto. How can I help you today?"
+                                        else:
+                                            initial_message = "Hello! This is Sophie from Otto's Auto. How can I help you today?"
+                                    except:
+                                        initial_message = "Hello! This is Sophie from Otto's Auto. How can I help you today?"
+                                else:
+                                    initial_message = "Hello! This is Sophie from Otto's Auto. How can I help you today?"
+
+                                # Add initial greeting to conversation history so context is maintained
+                                openai.add_assistant_message(initial_message)
+
+                                # Send through TTS
+                                async for audio_chunk in tts.text_to_speech(initial_message):
+                                    if audio_chunk:
+                                        # Encode to base64 for Twilio
+                                        audio_b64 = base64.b64encode(audio_chunk).decode("utf-8")
+
+                                        # Send to Twilio
+                                        await websocket.send_text(
+                                            json.dumps({
+                                                "event": "media",
+                                                "streamSid": stream_sid,
+                                                "media": {"payload": audio_b64},
+                                            })
+                                        )
+
+                                logger.info("Inbound proactive greeting sent successfully")
+                            except Exception as e:
+                                logger.error(f"Failed to send inbound greeting: {e}", exc_info=True)
 
                     elif event == "media":
                         # Decode audio and send to STT
@@ -617,8 +662,8 @@ async def handle_media_stream(websocket: WebSocket):
                                 sentence_buffer += chunk
                                 logger.debug(f"[VOICE] Got OpenAI chunk: '{chunk}'")
 
-                                # Send on punctuation OR every 10 words to minimize latency
-                                # This balances natural speech phrasing with responsiveness
+                                # Send on punctuation OR every 5 words to minimize latency
+                                # Aggressive buffering for faster response (reference: call-gpt uses 5-10 word chunks)
                                 stripped_buffer = sentence_buffer.strip()
                                 word_count = len(stripped_buffer.split())
 
@@ -626,8 +671,8 @@ async def handle_media_stream(websocket: WebSocket):
                                 if stripped_buffer and stripped_buffer[-1] in ".!?:;":
                                     # Send complete sentences
                                     should_send = True
-                                elif word_count >= 10:
-                                    # Send partial phrases to avoid long delays
+                                elif word_count >= 5:
+                                    # Send partial phrases to avoid long delays (reduced from 10)
                                     should_send = True
 
                                 if should_send:
@@ -636,9 +681,28 @@ async def handle_media_stream(websocket: WebSocket):
                                     sentence_buffer = ""
 
                             elif event["type"] == "tool_call":
-                                # Tool is being executed (logged by OpenAI service)
+                                # Tool is being executed - provide immediate feedback to avoid silence
+                                # Reference: call-gpt "say before tool" pattern for better UX
                                 tool_name = event["name"]
                                 logger.info(f"[VOICE] Tool executing: {tool_name}")
+
+                                # Send immediate feedback based on tool type
+                                tool_feedback_map = {
+                                    "lookup_customer": "Let me look that up for you...",
+                                    "search_customers_by_name": "Let me search for that customer...",
+                                    "get_appointment_details": "Let me check on that appointment...",
+                                    "schedule_appointment": "Let me schedule that for you...",
+                                    "get_available_timeslots": "Let me check available times...",
+                                }
+
+                                feedback_message = tool_feedback_map.get(tool_name, "Just a moment...")
+
+                                # Send feedback immediately to TTS
+                                logger.info(f"[VOICE] Sending tool feedback: '{feedback_message}'")
+                                await tts.send_text(feedback_message)
+
+                                # Track that we provided feedback (add to response_text for context)
+                                response_text += feedback_message + " "
 
                             elif event["type"] == "tool_result":
                                 # Tool execution completed
@@ -698,7 +762,7 @@ async def handle_media_stream(websocket: WebSocket):
                             logger.info(f"[VOICE] Ending call in 2 seconds")
                             await asyncio.sleep(2)  # Let final message finish playing
 
-                            # Send hangup event to Twilio
+                            # Send hangup event to Twilio (clears audio queue)
                             try:
                                 await websocket.send_text(
                                     json.dumps({
@@ -709,6 +773,18 @@ async def handle_media_stream(websocket: WebSocket):
                                 logger.info(f"[VOICE] Hangup event sent to Twilio")
                             except Exception as e:
                                 logger.error(f"[VOICE] Failed to send hangup event: {e}")
+
+                            # Actually terminate the call via Twilio API
+                            if call_sid:
+                                try:
+                                    twilio_client = TwilioClient(
+                                        settings.TWILIO_ACCOUNT_SID,
+                                        settings.TWILIO_AUTH_TOKEN
+                                    )
+                                    twilio_client.calls(call_sid).update(status='completed')
+                                    logger.info(f"[VOICE] Call {call_sid} terminated via Twilio API")
+                                except Exception as e:
+                                    logger.error(f"[VOICE] Failed to terminate call via Twilio API: {e}")
 
                             # Exit the transcript processing loop
                             break

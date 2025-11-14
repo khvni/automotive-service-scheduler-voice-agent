@@ -139,7 +139,104 @@ async def lookup_customer(db: AsyncSession, phone: str) -> Optional[Dict[str, An
 
 
 # ============================================================================
-# Tool 2: Get Available Slots (POC Mock)
+# Tool 2: Search Customers by Name
+# ============================================================================
+
+
+async def search_customers_by_name(
+    db: AsyncSession,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Search for customers by first and/or last name with partial matching.
+
+    Enables name-based customer lookup when phone number is not available.
+    Uses case-insensitive partial matching (ILIKE).
+
+    Args:
+        db: Database session
+        first_name: Customer first name (partial match supported)
+        last_name: Customer last name (partial match supported)
+
+    Returns:
+        List of matching customers with basic info (top 5 results):
+            [
+                {
+                    "id": int,
+                    "first_name": str,
+                    "last_name": str,
+                    "phone_number": str,
+                    "email": str,
+                    "customer_since": str (ISO date) | None,
+                    "vehicle_count": int
+                }
+            ]
+
+    Examples:
+        - search_customers_by_name(first_name="John") -> All Johns
+        - search_customers_by_name(last_name="Smith") -> All Smiths
+        - search_customers_by_name(first_name="Ali", last_name="Khan") -> Ali Khan matches
+    """
+    try:
+        if not first_name and not last_name:
+            logger.warning("search_customers_by_name called with no search criteria")
+            return []
+
+        # Build query with partial matching
+        stmt = select(Customer).options(selectinload(Customer.vehicles))
+
+        if first_name and last_name:
+            # Both provided - match both
+            stmt = stmt.where(
+                Customer.first_name.ilike(f"%{first_name}%"),
+                Customer.last_name.ilike(f"%{last_name}%")
+            )
+        elif first_name:
+            # Only first name
+            stmt = stmt.where(Customer.first_name.ilike(f"%{first_name}%"))
+        else:
+            # Only last name
+            stmt = stmt.where(Customer.last_name.ilike(f"%{last_name}%"))
+
+        # Limit to top 5 results to avoid overwhelming the LLM
+        stmt = stmt.limit(5)
+
+        result = await db.execute(stmt)
+        customers = result.scalars().all()
+
+        # Build response list
+        customer_list = []
+        for customer in customers:
+            customer_list.append({
+                "id": customer.id,
+                "first_name": customer.first_name,
+                "last_name": customer.last_name,
+                "phone_number": customer.phone_number,
+                "email": customer.email,
+                "customer_since": (
+                    customer.customer_since.isoformat() if customer.customer_since else None
+                ),
+                "vehicle_count": len(customer.vehicles) if customer.vehicles else 0,
+            })
+
+        logger.info(
+            f"Found {len(customer_list)} customers matching "
+            f"first_name='{first_name}', last_name='{last_name}'"
+        )
+
+        return customer_list
+
+    except Exception as e:
+        logger.error(
+            f"Error searching customers by name (first='{first_name}', last='{last_name}'): {e}",
+            exc_info=True
+        )
+        raise
+
+
+# ============================================================================
+# Tool 3: Get Available Slots (POC Mock)
 # ============================================================================
 
 

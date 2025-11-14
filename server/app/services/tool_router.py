@@ -40,6 +40,7 @@ class ToolRouter:
         # Tool registry - maps function names to handler methods
         self.tools: Dict[str, Callable] = {
             "lookup_customer": self._lookup_customer,
+            "search_customers_by_name": self._search_customers_by_name,
             "get_available_slots": self._get_available_slots,
             "book_appointment": self._book_appointment,
             "get_upcoming_appointments": self._get_upcoming_appointments,
@@ -127,6 +128,44 @@ class ToolRouter:
         except Exception as e:
             logger.error(f"Error looking up customer: {e}", exc_info=True)
             return {"success": False, "error": str(e), "message": "Error looking up customer"}
+
+    async def _search_customers_by_name(
+        self, first_name: str = None, last_name: str = None
+    ) -> Dict[str, Any]:
+        """
+        Search for customers by first and/or last name.
+
+        Args:
+            first_name: Customer's first name (partial match supported)
+            last_name: Customer's last name (partial match supported)
+
+        Returns:
+            Dict with list of matching customers or not found message
+        """
+        try:
+            # Import here to avoid circular dependencies
+            from app.tools.crm_tools import search_customers_by_name
+
+            customers = await search_customers_by_name(
+                self.db, first_name=first_name, last_name=last_name
+            )
+
+            if not customers:
+                return {
+                    "success": True,
+                    "data": {"found": False, "customers": []},
+                    "message": "No customers found with that name",
+                }
+
+            return {
+                "success": True,
+                "data": {"found": True, "customers": customers, "count": len(customers)},
+                "message": f"Found {len(customers)} customer{'s' if len(customers) != 1 else ''} matching that name",
+            }
+
+        except Exception as e:
+            logger.error(f"Error searching customers by name: {e}", exc_info=True)
+            return {"success": False, "error": str(e), "message": "Error searching for customers"}
 
     async def _get_available_slots(self, date: str, duration_minutes: int = 30) -> Dict[str, Any]:
         """

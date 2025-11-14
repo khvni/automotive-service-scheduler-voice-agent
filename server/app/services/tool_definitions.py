@@ -29,6 +29,26 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "search_customers_by_name",
+            "description": "Search for customers by first name and/or last name. Use this when customer provides their name but not phone number. Returns up to 5 matching customers with phone numbers for confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "first_name": {
+                        "type": "string",
+                        "description": "Customer's first name (partial match supported, case-insensitive)",
+                    },
+                    "last_name": {
+                        "type": "string",
+                        "description": "Customer's last name (partial match supported, case-insensitive)",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_available_slots",
             "description": "Get available appointment time slots for a specific date. Returns list of available times for booking.",
             "parameters": {
