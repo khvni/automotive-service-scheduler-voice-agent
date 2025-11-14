@@ -27,6 +27,7 @@ pip-delete-this-directory.txt
 
 # Virtual environments
 venv/
+venv-*/
 env/
 ENV/
 .venv
@@ -69,6 +70,7 @@ service-account.json
 tmp/
 temp/
 *.tmp
+*.pid
 
 # Node modules (if any)
 node_modules/
