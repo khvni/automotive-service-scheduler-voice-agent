@@ -198,12 +198,40 @@ fi
 echo ""
 
 # Generate fresh Google Calendar refresh token
-echo -e "${YELLOW}Generating fresh Google Calendar refresh token...${NC}"
+echo -e "${YELLOW}Checking Google Calendar authentication...${NC}"
 if venv-new/bin/python scripts/generate_google_refresh_token.py --update-env 2>&1 | grep -q "SUCCESS"; then
     echo -e "${GREEN}✓ Google Calendar refresh token updated${NC}"
 else
-    echo -e "${YELLOW}⚠ Skipped Google Calendar token refresh (may need manual authorization)${NC}"
-    echo -e "${YELLOW}  Run manually: python scripts/generate_google_refresh_token.py --update-env${NC}"
+    echo -e "${YELLOW}⚠ OAuth authorization failed or skipped${NC}"
+    echo -e "${YELLOW}  Testing if existing refresh token is still valid...${NC}"
+
+    # Test if current token works
+    if venv-new/bin/python -c "
+import sys
+sys.path.insert(0, 'server')
+from app.config import settings
+from app.services.calendar_service import CalendarService
+try:
+    cal = CalendarService(
+        settings.GOOGLE_CLIENT_ID,
+        settings.GOOGLE_CLIENT_SECRET,
+        settings.GOOGLE_REFRESH_TOKEN,
+        settings.CALENDAR_TIMEZONE
+    )
+    cal.get_calendar_service()
+    print('VALID')
+except:
+    print('INVALID')
+" 2>/dev/null | grep -q "VALID"; then
+        echo -e "${GREEN}✓ Existing Google Calendar token is valid${NC}"
+    else
+        echo -e "${RED}✗ Existing token is invalid - using MOCK calendar${NC}"
+        echo -e "${YELLOW}  📅 Calendar operations will use mock data for testing${NC}"
+        echo -e "${YELLOW}  To fix: Update redirect URI in Google Cloud Console to include:${NC}"
+        echo -e "${YELLOW}     - http://localhost:8080${NC}"
+        echo -e "${YELLOW}     - http://localhost:8080/${NC}"
+        echo -e "${YELLOW}  Then run: python scripts/generate_google_refresh_token.py --update-env${NC}"
+    fi
 fi
 echo ""
 

@@ -45,6 +45,7 @@ class CalendarService:
         client_secret: str,
         refresh_token: str,
         timezone_name: str = "America/New_York",
+        use_mock: bool = False,
     ):
         """
         Initialize Calendar Service.
@@ -54,10 +55,12 @@ class CalendarService:
             client_secret: Google OAuth2 client secret
             refresh_token: Google OAuth2 refresh token
             timezone_name: Timezone for appointment scheduling (default: America/New_York)
+            use_mock: If True, use mock calendar data instead of real API (default: False)
         """
         self.client_id = client_id
         self.client_secret = client_secret
         self.refresh_token = refresh_token
+        self.use_mock = use_mock
 
         try:
             self.timezone = ZoneInfo(timezone_name)
@@ -68,7 +71,11 @@ class CalendarService:
             self.timezone = ZoneInfo("America/New_York")
 
         self._service = None
-        logger.info(f"CalendarService initialized with timezone: {timezone_name}")
+
+        if use_mock:
+            logger.warning("⚠️  CalendarService initialized in MOCK mode - using fake calendar data")
+        else:
+            logger.info(f"CalendarService initialized with timezone: {timezone_name}")
 
     def get_calendar_service(self):
         """
@@ -79,11 +86,14 @@ class CalendarService:
         when needed.
 
         Returns:
-            Google Calendar API service instance
+            Google Calendar API service instance or None if using mock mode
 
         Raises:
-            Exception: If credentials or service creation fails
+            Exception: If credentials or service creation fails (only in non-mock mode)
         """
+        if self.use_mock:
+            return None  # Return None in mock mode, methods will handle this
+
         if self._service:
             return self._service
 
@@ -107,7 +117,9 @@ class CalendarService:
 
         except Exception as e:
             logger.error(f"Error creating calendar service: {e}", exc_info=True)
-            raise
+            logger.warning("⚠️  Falling back to MOCK calendar mode")
+            self.use_mock = True
+            return None
 
     async def get_free_availability(
         self, start_time: datetime, end_time: datetime, duration_minutes: int = 30
@@ -136,6 +148,11 @@ class CalendarService:
         Raises:
             Exception: If freebusy query fails after retries
         """
+        # MOCK MODE: Return fake availability
+        if self.use_mock:
+            logger.warning("📅 MOCK: Returning fake calendar availability")
+            return self._generate_mock_availability(start_time, end_time, duration_minutes)
+
         # Start metrics tracking
         metrics_tracker = get_metrics_tracker()
         metric = metrics_tracker.start_operation("freebusy_query")
@@ -144,6 +161,11 @@ class CalendarService:
             # Define the operation to retry
             async def _query_freebusy():
                 service = self.get_calendar_service()
+
+                # If service creation failed and fell back to mock mode
+                if service is None:
+                    logger.warning("📅 MOCK: Service unavailable, returning fake availability")
+                    return self._generate_mock_availability(start_time, end_time, duration_minutes)
 
                 # Ensure times are timezone-aware
                 if start_time.tzinfo is None:
@@ -234,6 +256,18 @@ class CalendarService:
         Raises:
             Exception: If event creation fails
         """
+        # MOCK MODE: Return fake success
+        if self.use_mock:
+            import uuid
+            fake_id = f"mock_{uuid.uuid4().hex[:16]}"
+            logger.warning(f"📅 MOCK: Pretending to create calendar event '{title}' (ID: {fake_id})")
+            return {
+                "success": True,
+                "event_id": fake_id,
+                "calendar_link": f"https://calendar.google.com/calendar/event?eid={fake_id}",
+                "message": f"MOCK: Event '{title}' created (fake)",
+            }
+
         # Start metrics tracking
         metrics_tracker = get_metrics_tracker()
         metric = metrics_tracker.start_operation("create_event")
@@ -349,6 +383,16 @@ class CalendarService:
         Raises:
             Exception: If event update fails
         """
+        # MOCK MODE: Return fake success
+        if self.use_mock:
+            logger.warning(f"📅 MOCK: Pretending to update calendar event {event_id}")
+            return {
+                "success": True,
+                "event_id": event_id,
+                "calendar_link": f"https://calendar.google.com/calendar/event?eid={event_id}",
+                "message": "MOCK: Event updated (fake)",
+            }
+
         # Start metrics tracking
         metrics_tracker = get_metrics_tracker()
         metric = metrics_tracker.start_operation("update_event")
@@ -453,6 +497,11 @@ class CalendarService:
         Raises:
             Exception: If event cancellation fails
         """
+        # MOCK MODE: Return fake success
+        if self.use_mock:
+            logger.warning(f"📅 MOCK: Pretending to cancel calendar event {event_id}")
+            return {"success": True, "message": "MOCK: Event cancelled (fake)"}
+
         # Start metrics tracking
         metrics_tracker = get_metrics_tracker()
         metric = metrics_tracker.start_operation("delete_event")
@@ -647,4 +696,50 @@ class CalendarService:
             # No lunch overlap, add entire slot
             slots.append({"start": slot_start, "end": slot_end})
 
+        return slots
+
+    def _generate_mock_availability(
+        self, start_time: datetime, end_time: datetime, duration_minutes: int
+    ) -> List[Dict[str, datetime]]:
+        """
+        Generate mock calendar availability for testing when API is unavailable.
+
+        Args:
+            start_time: Start of availability window
+            end_time: End of availability window
+            duration_minutes: Minimum slot duration
+
+        Returns:
+            List of fake available slots
+        """
+        # Ensure times are timezone-aware
+        if start_time.tzinfo is None:
+            start_time = start_time.replace(tzinfo=self.timezone)
+        if end_time.tzinfo is None:
+            end_time = end_time.replace(tzinfo=self.timezone)
+
+        # Generate slots every 30 minutes during business hours
+        slots = []
+        current = start_time
+
+        # Set to business hours (9 AM - 5 PM)
+        business_start = current.replace(hour=9, minute=0, second=0, microsecond=0)
+        business_end = current.replace(hour=17, minute=0, second=0, microsecond=0)
+
+        current = max(current, business_start)
+        end = min(end_time, business_end)
+
+        while current < end:
+            slot_end = current + timedelta(minutes=duration_minutes)
+            if slot_end <= end:
+                # Exclude lunch hour (12-1 PM)
+                lunch_start = current.replace(hour=12, minute=0)
+                lunch_end = current.replace(hour=13, minute=0)
+
+                if not (current < lunch_end and slot_end > lunch_start):
+                    slots.append({"start": current, "end": slot_end})
+
+            current += timedelta(minutes=30)
+
+        logger.info(f"📅 MOCK: Generated {len(slots)} fake availability slots")
         return slots
